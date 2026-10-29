@@ -1,5 +1,5 @@
-import { Heading } from "@chakra-ui/react";
+import { Editor } from "@/components/editor";
 
 export default function Home() {
-	return <Heading>madori</Heading>;
+	return <Editor />;
 }
