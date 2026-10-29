@@ -1,5 +1,5 @@
 import type { ReactNode, Ref } from "react";
-import { roomM2, selectionBounds, toJo } from "@/lib/geometry";
+import { ROOM_WALL, roomM2, selectionBounds, toJo } from "@/lib/geometry";
 import type {
 	Door,
 	Furniture,
@@ -83,7 +83,7 @@ function RoomLabels({
 	const cx = room.x + room.w / 2,
 		cy = room.y + room.h / 2,
 		m2 = roomM2(room),
-		dx = room.x + 5 + screenPx(11, z);
+		dx = room.x + screenPx(11, z);
 	return (
 		<>
 			{room.w * z > 76 && room.h * z > 48 ? (
@@ -126,7 +126,7 @@ function RoomLabels({
 			{showDims && room.w * z > 64 && (
 				<Label
 					x={cx}
-					y={room.y + 5 + screenPx(11, z)}
+					y={room.y + screenPx(11, z)}
 					size={10.5}
 					fill={palette.gray500}
 					weight={500}
@@ -722,13 +722,13 @@ export function PlanSvg(props: PlanSvgProps) {
 						key={`w${room.id}`}
 						data-id={room.id}
 						data-wall="1"
-						x={room.x}
-						y={room.y}
-						width={room.w}
-						height={room.h}
+						x={room.x - ROOM_WALL / 2}
+						y={room.y - ROOM_WALL / 2}
+						width={room.w + ROOM_WALL}
+						height={room.h + ROOM_WALL}
 						fill="none"
 						stroke={palette.gray800}
-						strokeWidth={10}
+						strokeWidth={ROOM_WALL}
 						style={{ cursor }}
 					/>
 				))}

@@ -15,6 +15,8 @@ export const snap = (value: number, step: number) =>
 	Math.round(value / step) * step;
 export const roomM2 = (room: Room) => (room.w * room.h) / 10000;
 export const toJo = (m2: number) => m2 / 1.62;
+// A room's wall is drawn outside its rect, so w and h stay the interior size.
+export const ROOM_WALL = 10;
 
 export function shift(item: Item, dx: number, dy: number): Item {
 	if (item.type === "room") return { ...item, x: item.x + dx, y: item.y + dy };
@@ -114,7 +116,7 @@ export function planBounds(items: Item[], margin: number): Rect {
 	for (const item of items) {
 		const box = boundsOf(item);
 		const extra =
-			item.type === "door" ? item.len : item.type === "room" ? 5 : 0;
+			item.type === "door" ? item.len : item.type === "room" ? ROOM_WALL : 0;
 		x1 = Math.min(x1, box.x - extra);
 		y1 = Math.min(y1, box.y - extra);
 		x2 = Math.max(x2, box.x + box.w + extra);
@@ -152,32 +154,35 @@ export function wallEdge(wall: Wall): Edge[] {
 	return [];
 }
 
+// Centre lines of a room's walls, spanning its interior, or of a partition.
+function hostEdges(host: Room | Wall): Edge[] {
+	if (host.type === "wall") return wallEdge(host);
+	const half = ROOM_WALL / 2;
+	return [
+		{ axis: "h", at: host.y - half, from: host.x, to: host.x + host.w },
+		{
+			axis: "h",
+			at: host.y + host.h + half,
+			from: host.x,
+			to: host.x + host.w,
+		},
+		{ axis: "v", at: host.x - half, from: host.y, to: host.y + host.h },
+		{
+			axis: "v",
+			at: host.x + host.w + half,
+			from: host.y,
+			to: host.y + host.h,
+		},
+	];
+}
+
 // Nearest room edge or partition close enough to anchor a door or window, or null.
 export function wallAt(x: number, y: number, items: Item[], step: number) {
 	let best: { x: number; y: number; axis: Axis } | null = null,
 		bestDist = 60;
 	for (const host of items) {
 		if (host.type !== "room" && host.type !== "wall") continue;
-		const edges: Edge[] =
-			host.type === "wall"
-				? wallEdge(host)
-				: [
-						{ axis: "h", at: host.y, from: host.x, to: host.x + host.w },
-						{
-							axis: "h",
-							at: host.y + host.h,
-							from: host.x,
-							to: host.x + host.w,
-						},
-						{ axis: "v", at: host.x, from: host.y, to: host.y + host.h },
-						{
-							axis: "v",
-							at: host.x + host.w,
-							from: host.y,
-							to: host.y + host.h,
-						},
-					];
-		for (const edge of edges) {
+		for (const edge of hostEdges(host)) {
 			const along = edge.axis === "h" ? x : y,
 				perp = edge.axis === "h" ? y : x;
 			const foot = Math.max(edge.from, Math.min(edge.to, along));
@@ -196,27 +201,12 @@ export function wallAt(x: number, y: number, items: Item[], step: number) {
 }
 
 function onEdge(fixture: Door | Window, host: Room | Wall) {
-	if (host.type === "wall")
-		return wallEdge(host).some(
-			(edge) =>
-				edge.axis === fixture.axis &&
-				Math.abs((fixture.axis === "h" ? fixture.y : fixture.x) - edge.at) <
-					1 &&
-				(fixture.axis === "h" ? fixture.x : fixture.y) >= edge.from - 1 &&
-				(fixture.axis === "h" ? fixture.x : fixture.y) <= edge.to + 1,
-		);
-	if (fixture.axis === "h")
-		return (
-			(Math.abs(fixture.y - host.y) < 1 ||
-				Math.abs(fixture.y - host.y - host.h) < 1) &&
-			fixture.x >= host.x - 1 &&
-			fixture.x <= host.x + host.w + 1
-		);
-	return (
-		(Math.abs(fixture.x - host.x) < 1 ||
-			Math.abs(fixture.x - host.x - host.w) < 1) &&
-		fixture.y >= host.y - 1 &&
-		fixture.y <= host.y + host.h + 1
+	return hostEdges(host).some(
+		(edge) =>
+			edge.axis === fixture.axis &&
+			Math.abs((fixture.axis === "h" ? fixture.y : fixture.x) - edge.at) < 1 &&
+			(fixture.axis === "h" ? fixture.x : fixture.y) >= edge.from - 1 &&
+			(fixture.axis === "h" ? fixture.x : fixture.y) <= edge.to + 1,
 	);
 }
 
@@ -233,7 +223,7 @@ export function attachedTo(host: Item, items: Item[]) {
 		: [];
 }
 
-// Nearest room-corner position close enough to snap to, tucked just inside the wall, or null.
+// Nearest interior room-corner position close enough to snap to, or null.
 export function pillarSnap(
 	cx: number,
 	cy: number,
@@ -251,8 +241,8 @@ export function pillarSnap(
 			[room.x, room.y + room.h, 1, -1],
 			[room.x + room.w, room.y + room.h, -1, -1],
 		]) {
-			const tx = x + sx * (5 + w / 2),
-				ty = y + sy * (5 + h / 2),
+			const tx = x + (sx * w) / 2,
+				ty = y + (sy * h) / 2,
 				dist = Math.hypot(cx - tx, cy - ty);
 			if (dist < bestDist) {
 				bestDist = dist;
