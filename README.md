@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Madori
 
-## Getting Started
+ブラウザで間取り図を描くエディタ。部屋・ドア・窓・仕切り・柱・家具を配置して寸法を編集でき、面積を ㎡ と畳で表示する。
 
-First, run the development server:
+https://madori.yong-ju.me
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 機能
+
+- 部屋をドラッグで作成し、角をドラッグしてサイズを変える。寸法はグリッドに吸着する。
+- ドアと窓は部屋の辺や仕切りに吸着し、部屋を動かすと一緒に動く。ドアは開き戸・引き戸・折れ戸を選べる。
+- 柱は部屋の角に吸着する。家具は冷蔵庫やベッドなどの種類と一般的なサイズから選べる。
+- 選択中の要素の幅・奥行・長さをパネルからメートル単位で入力できる。
+- 延床面積と部屋ごとの面積を ㎡ と畳 (1 畳 = 1.62 ㎡) で表示する。
+- PNG と PDF (ブラウザの印刷ダイアログ経由) で書き出せる。
+- 編集内容はブラウザの localStorage に自動保存される。サーバーには何も送らない。
+
+## 開発
+
+Nix の devshell に Bun と Node.js が入っている。direnv を使っていれば `cd` するだけで有効になる。
+
+```sh
+nix develop      # direnv を使わない場合
+bun install
+bun dev          # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| コマンド | 内容 |
+| --- | --- |
+| `bun run build` | 静的サイトとして `out/` に書き出す (`output: "export"`) |
+| `bun run check` | Biome で lint とフォーマットを検査する |
+| `bun run format` | Biome でフォーマットする |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+主なディレクトリ:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `src/components/` — エディタの UI。`canvas.tsx` がキャンバス上のマウス・タッチ・キーボード操作を扱う。
+- `src/lib/` — 間取りの状態と操作 (`plan-store.ts`、zustand)、幾何計算、書き出し、型。
+- `terraform/` — ホスティング用のインフラ定義。詳細は [terraform/README.md](terraform/README.md)。
 
-## Learn More
+## デプロイ
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`main` に push すると GitHub Actions (`.github/workflows/deploy.yml`) がビルドし、S3 に sync して CloudFront のキャッシュを無効化する。
