@@ -22,7 +22,7 @@ data "aws_iam_policy_document" "github_assume" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:*"]
+      values   = ["${var.github_oidc_sub_prefix}:*"]
     }
   }
 }

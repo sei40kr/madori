@@ -19,8 +19,8 @@ variable "parent_zone_name" {
   default     = "yong-ju.me"
 }
 
-variable "github_repository" {
-  description = "owner/repo allowed to assume the deploy role via OIDC"
+variable "github_oidc_sub_prefix" {
+  description = "OIDC subject prefix of the repository allowed to assume the deploy role. The repository uses immutable subjects (owner and repo with their IDs); read it with `gh api repos/OWNER/REPO/actions/oidc/customization/sub`."
   type        = string
-  default     = "sei40kr/madori"
+  default     = "repo:sei40kr@11665236/madori@1438352034"
 }
