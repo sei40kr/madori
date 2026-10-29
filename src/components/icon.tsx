@@ -1,11 +1,13 @@
 import {
 	ArrowLeftRight,
 	Box,
+	ChevronDown,
 	Copy,
 	createLucideIcon,
 	DoorOpen,
 	FilePlus,
 	FileText,
+	Folder,
 	Grid2x2,
 	Image,
 	type LucideIcon,
@@ -54,6 +56,8 @@ const ICONS: Record<string, LucideIcon> = {
 	fit: Maximize,
 	wall: Wall,
 	pillar: Pillar,
+	folder: Folder,
+	chevron: ChevronDown,
 };
 
 export function Icon({ name, size = 16 }: { name: string; size?: number }) {

@@ -18,9 +18,14 @@ export const GRID = 10;
 type Dimension = "w" | "h" | "len";
 type Patch = Partial<Item> | ((item: Item) => Partial<Item>);
 
+export type Plan = { id: string; name: string; items: Item[]; updated: number };
+
 type PlanState = {
+	// The open plan's items and name; kept in sync with its entry in `plans`.
 	items: Item[];
 	name: string;
+	plans: Plan[];
+	curId: string;
 	past: Item[][];
 	future: Item[][];
 	sel: string | null;
@@ -39,7 +44,9 @@ type PlanState = {
 	record: (before: Item[]) => void;
 	undo: () => void;
 	redo: () => void;
-	reset: () => void;
+	newPlan: () => void;
+	openPlan: (id: string) => void;
+	deletePlan: (id: string) => void;
 	setName: (name: string) => void;
 	select: (id: string | null) => void;
 	setTool: (tool: Tool) => void;
@@ -69,6 +76,26 @@ type PlanState = {
 const uid = () =>
 	`i${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
+// State for a just-opened plan; undo history and tool state never carry over between plans.
+const open = (plan: Plan) => ({
+	items: plan.items,
+	name: plan.name,
+	curId: plan.id,
+	past: [],
+	future: [],
+	sel: null,
+	tool: "select" as const,
+	draft: null,
+	draftLine: null,
+	lastEdit: null,
+});
+const blank = (): Plan => ({
+	id: uid(),
+	name: "新しい間取り",
+	items: [],
+	updated: Date.now(),
+});
+
 export const usePlanStore = create<PlanState>()(
 	persist(
 		(set, get) => {
@@ -80,9 +107,15 @@ export const usePlanStore = create<PlanState>()(
 					tool: keepTool ? state.tool : "select",
 				}));
 			};
-			return {
-				items: sample(),
+			const first: Plan = {
+				id: uid(),
 				name: "わが家の間取り",
+				items: sample(),
+				updated: Date.now(),
+			};
+			return {
+				...open(first),
+				plans: [first],
 				past: [],
 				future: [],
 				sel: null,
@@ -144,10 +177,22 @@ export const usePlanStore = create<PlanState>()(
 							lastEdit: null,
 						};
 					}),
-				reset: () => {
-					if (!get().items.length) return;
-					get().commit(() => []);
-					set({ sel: null });
+				newPlan: () => {
+					const plan = blank();
+					set((state) => ({ ...open(plan), plans: [plan, ...state.plans] }));
+				},
+				openPlan: (id) => {
+					const plan = get().plans.find((p) => p.id === id);
+					if (plan) set(open(plan));
+				},
+				// Deleting the open plan opens the most recently updated one left, or a blank one.
+				deletePlan: (id) => {
+					const plans = get().plans.filter((p) => p.id !== id);
+					if (id !== get().curId) return set({ plans });
+					const next = plans.toSorted((a, b) => b.updated - a.updated)[0];
+					if (next) return set({ ...open(next), plans });
+					const plan = blank();
+					set({ ...open(plan), plans: [plan] });
 				},
 				setName: (name) => set({ name }),
 				select: (id) =>
@@ -365,9 +410,36 @@ export const usePlanStore = create<PlanState>()(
 		},
 		{
 			name: "madori.plan.v1",
-			partialize: (state) => ({ items: state.items, name: state.name }),
+			version: 1,
+			partialize: (state) => ({ plans: state.plans, curId: state.curId }),
+			// v0 held a single plan; keep it as the first saved plan.
+			migrate: (persisted, version) => {
+				if (version > 0) return persisted;
+				const { items, name } = persisted as { items: Item[]; name: string };
+				const id = uid();
+				return { plans: [{ id, name, items, updated: Date.now() }], curId: id };
+			},
+			merge: (persisted, current) => {
+				const { plans, curId } = persisted as Pick<
+					PlanState,
+					"plans" | "curId"
+				>;
+				const plan = plans.find((p) => p.id === curId) ?? plans[0];
+				return plan ? { ...current, plans, ...open(plan) } : current;
+			},
 			// Hydrated after mount so the server render and the first client render match.
 			skipHydration: true,
 		},
 	),
 );
+
+// Saves edits to the open plan back into its entry as they happen.
+usePlanStore.subscribe(({ items, name, plans, curId }) => {
+	const plan = plans.find((p) => p.id === curId);
+	if (!plan || (plan.items === items && plan.name === name)) return;
+	usePlanStore.setState({
+		plans: plans.map((p) =>
+			p.id === curId ? { ...p, items, name, updated: Date.now() } : p,
+		),
+	});
+});

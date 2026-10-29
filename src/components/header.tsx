@@ -5,14 +5,17 @@ import {
 	Flex,
 	IconButton,
 	Input,
+	Menu,
+	Portal,
 	Separator,
 	Text,
 } from "@chakra-ui/react";
-import type { RefObject } from "react";
+import { type RefObject, useState } from "react";
 import { exportPdf, exportPng } from "@/lib/export";
 import { roomM2, toJo } from "@/lib/geometry";
 import { usePlanStore } from "@/lib/plan-store";
 import { Icon } from "./icon";
+import { byUpdated, PlanLibrary } from "./plan-library";
 
 export function Header({
 	svgRef,
@@ -20,6 +23,10 @@ export function Header({
 	svgRef: RefObject<SVGSVGElement | null>;
 }) {
 	const store = usePlanStore();
+	const [libraryOpen, setLibraryOpen] = useState(false);
+	const recent = byUpdated(
+		store.plans.filter((plan) => plan.id !== store.curId),
+	).slice(0, 5);
 	const totalM2 = store.items.reduce(
 		(sum, item) => (item.type === "room" ? sum + roomM2(item) : sum),
 		0,
@@ -52,6 +59,59 @@ export function Header({
 				Madori
 			</Text>
 			<Separator orientation="vertical" h="6" />
+			<Menu.Root>
+				<Menu.Trigger asChild>
+					<Button size="xs" variant="outline" flexShrink={0}>
+						<Icon name="folder" size={14} />
+						間取り
+						<Icon name="chevron" size={14} />
+					</Button>
+				</Menu.Trigger>
+				<Portal>
+					<Menu.Positioner>
+						<Menu.Content minW="240px">
+							<Menu.Item value="new" onSelect={store.newPlan}>
+								<Icon name="new" size={14} />
+								新規作成
+							</Menu.Item>
+							<Menu.Item value="open" onSelect={() => setLibraryOpen(true)}>
+								<Icon name="folder" size={14} />
+								開く…
+							</Menu.Item>
+							{recent.length > 0 && (
+								<Menu.ItemGroup>
+									<Menu.Separator />
+									<Menu.ItemGroupLabel
+										textStyle="xs"
+										fontWeight="medium"
+										color="fg.subtle"
+									>
+										最近の間取り
+									</Menu.ItemGroupLabel>
+									{recent.map((plan) => {
+										const date = new Date(plan.updated);
+										return (
+											<Menu.Item
+												key={plan.id}
+												value={plan.id}
+												onSelect={() => store.openPlan(plan.id)}
+											>
+												<Box flex="1" minW="0" maxW="200px" truncate>
+													{plan.name}
+												</Box>
+												<Menu.ItemCommand fontVariantNumeric="tabular-nums">
+													{date.getMonth() + 1}/{date.getDate()}
+												</Menu.ItemCommand>
+											</Menu.Item>
+										);
+									})}
+								</Menu.ItemGroup>
+							)}
+						</Menu.Content>
+					</Menu.Positioner>
+				</Portal>
+			</Menu.Root>
+			<PlanLibrary open={libraryOpen} onOpenChange={setLibraryOpen} />
 			<Input
 				size="xs"
 				aria-label="プラン名"
@@ -92,10 +152,6 @@ export function Header({
 				</IconButton>
 			</Flex>
 			<Flex align="center" gap="2" flexShrink={0}>
-				<Button size="xs" variant="outline" onClick={store.reset}>
-					<Icon name="new" size={14} />
-					新規
-				</Button>
 				<Button
 					size="xs"
 					variant="outline"

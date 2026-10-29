@@ -115,6 +115,17 @@ export function Canvas({
 		return () => observer.disconnect();
 	}, []);
 
+	// Fits each plan as it is opened. Not on mount: a write before rehydration would overwrite the saved plans.
+	useEffect(
+		() =>
+			usePlanStore.subscribe((state, prev) => {
+				const rect = containerRef.current?.getBoundingClientRect();
+				if (state.curId !== prev.curId && rect?.width)
+					state.fit(rect.width, rect.height);
+			}),
+		[],
+	);
+
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
 			const state = usePlanStore.getState();
