@@ -10,7 +10,7 @@ import {
 	shift,
 	snap,
 } from "@/lib/geometry";
-import { GRID, usePlanStore } from "@/lib/plan-store";
+import { floorName, GRID, usePlanStore } from "@/lib/plan-store";
 import type {
 	Furniture,
 	Item,
@@ -21,7 +21,7 @@ import type {
 	View,
 	Wall,
 } from "@/lib/types";
-import { ToolHint, ZoomControls } from "./canvas-overlays";
+import { FloorBar, ToolHint, ZoomControls } from "./canvas-overlays";
 import { PlanSvg } from "./plan-svg";
 
 type Drag =
@@ -412,6 +412,13 @@ export function Canvas({
 	);
 
 	const hint = HINTS[store.tool];
+	const groundRooms = store.plans
+		.find((plan) => plan.id === store.curId)
+		?.floors[0].items.filter((item): item is Room => item.type === "room");
+	const guide =
+		store.floor > 0 && store.showGuide && groundRooms?.length
+			? { rooms: groundRooms, label: `${floorName(0)}の外形` }
+			: undefined;
 	return (
 		<Box
 			ref={containerRef}
@@ -433,8 +440,10 @@ export function Canvas({
 					gridSize={GRID}
 					showDims
 					coarse={coarse}
+					guide={guide}
 				/>
 			</Box>
+			<FloorBar />
 			{hint && (
 				<ToolHint hint={hint} onCancel={() => store.setTool("select")} />
 			)}

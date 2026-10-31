@@ -15,7 +15,7 @@ import {
 } from "@chakra-ui/react";
 import { useState } from "react";
 import { roomM2, toJo } from "@/lib/geometry";
-import { usePlanStore } from "@/lib/plan-store";
+import { floorName, usePlanStore } from "@/lib/plan-store";
 import { FURNITURE, PILLAR_SIZES } from "@/lib/presets";
 import type {
 	DoorKind,
@@ -332,6 +332,12 @@ export function SelectionPanel() {
 
 export function PlanSummary() {
 	const items = usePlanStore((state) => state.items);
+	const multi = usePlanStore(
+		(state) =>
+			(state.plans.find((plan) => plan.id === state.curId)?.floors.length ??
+				0) > 1,
+	);
+	const floor = usePlanStore((state) => state.floor);
 	const select = usePlanStore((state) => state.select);
 	const rooms = items.filter((item): item is Room => item.type === "room");
 	const totalM2 = rooms.reduce((sum, room) => sum + roomM2(room), 0);
@@ -340,7 +346,10 @@ export function PlanSummary() {
 			<Text textStyle="sm" fontWeight="semibold">
 				間取りの概要
 			</Text>
-			<AreaStat label="延床面積" m2={totalM2} />
+			<AreaStat
+				label={multi ? `${floorName(floor)}の床面積` : "延床面積"}
+				m2={totalM2}
+			/>
 			<Stack gap="0.5">
 				<Text textStyle="xs" fontWeight="semibold" color="fg.muted" mb="1">
 					部屋

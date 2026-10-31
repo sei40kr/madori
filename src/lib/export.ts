@@ -1,10 +1,11 @@
 import { planBounds, roomM2, toJo } from "./geometry";
 import type { Item, View } from "./types";
 
-type Plan = { items: Item[]; name: string; view: View };
+// `floor` names the exported floor when the plan has several.
+type Plan = { items: Item[]; name: string; floor?: string; view: View };
 
 // The plan at the current zoom, cropped to its bounds, without editor-only elements, with a title line.
-function exportSvg(svg: SVGSVGElement, { items, name, view }: Plan) {
+function exportSvg(svg: SVGSVGElement, { items, name, floor, view }: Plan) {
 	const svgNs = "http://www.w3.org/2000/svg",
 		{ ox, oy, z } = view;
 	const clone = svg.cloneNode(true) as SVGSVGElement;
@@ -44,7 +45,7 @@ function exportSvg(svg: SVGSVGElement, { items, name, view }: Plan) {
 		["fill", "#18181b"],
 	])
 		title.setAttribute(String(name), String(value));
-	title.textContent = `${name}　延床 ${m2.toFixed(2)}㎡（${toJo(m2).toFixed(1)}畳）`;
+	title.textContent = `${name}${floor ? `　${floor}　床面積` : "　延床"} ${m2.toFixed(2)}㎡（${toJo(m2).toFixed(1)}畳）`;
 	clone.appendChild(title);
 	return { str: new XMLSerializer().serializeToString(clone), w: vw, h: vh };
 }
@@ -70,7 +71,7 @@ export function exportPng(svg: SVGSVGElement, plan: Plan) {
 			if (!blob) return;
 			const link = document.createElement("a");
 			link.href = URL.createObjectURL(blob);
-			link.download = `${plan.name || "madori"}.png`;
+			link.download = `${plan.name || "madori"}${plan.floor ? `_${plan.floor}` : ""}.png`;
 			document.body.appendChild(link);
 			link.click();
 			link.remove();
@@ -90,7 +91,7 @@ export function exportPdf(svg: SVGSVGElement, plan: Plan) {
 	const frame = document.createElement("iframe");
 	frame.style.cssText =
 		"position:fixed;right:0;bottom:0;width:0;height:0;border:0";
-	frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(plan.name)}</title><style>@page{size:A4 ${exported.w > exported.h ? "landscape" : "portrait"};margin:12mm}html,body{margin:0}svg{display:block;width:100%;height:auto;max-height:180mm}</style></head><body>${exported.str}</body></html>`;
+	frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(plan.name + (plan.floor ? `_${plan.floor}` : ""))}</title><style>@page{size:A4 ${exported.w > exported.h ? "landscape" : "portrait"};margin:12mm}html,body{margin:0}svg{display:block;width:100%;height:auto;max-height:180mm}</style></head><body>${exported.str}</body></html>`;
 	frame.onload = () => {
 		const win = frame.contentWindow;
 		if (!win) return;

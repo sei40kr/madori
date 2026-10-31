@@ -102,3 +102,48 @@ export function sample(): Item[] {
 		},
 	];
 }
+
+// The upper floor of `sample`, inside its footprint.
+export function sample2(): Item[] {
+	let count = 0;
+	const id = () => `t${count++}`;
+	const door = (x: number, y: number, len: number, axis: "h" | "v"): Item => ({
+		id: id(),
+		type: "door",
+		kind: "swing",
+		x,
+		y,
+		len,
+		axis,
+		flip: 0,
+	});
+	return [
+		{ id: id(), type: "room", name: "主寝室", x: 0, y: 0, w: 450, h: 300 },
+		{
+			id: id(),
+			type: "room",
+			name: "子ども部屋",
+			x: 460,
+			y: 0,
+			w: 440,
+			h: 300,
+		},
+		{ id: id(), type: "room", name: "WIC", x: 270, y: 310, w: 180, h: 140 },
+		{
+			id: id(),
+			type: "room",
+			name: "ホール・階段",
+			x: 460,
+			y: 310,
+			w: 350,
+			h: 140,
+		},
+		{ id: id(), type: "room", name: "トイレ", x: 820, y: 310, w: 80, h: 140 },
+		{ id: id(), type: "window", x: 225, y: -5, len: 180, axis: "h" },
+		{ id: id(), type: "window", x: 680, y: -5, len: 150, axis: "h" },
+		door(360, 305, 70, "h"),
+		door(560, 305, 80, "h"),
+		door(455, 380, 70, "v"),
+		door(815, 380, 60, "v"),
+	];
+}

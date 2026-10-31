@@ -1,5 +1,12 @@
 import type { ReactNode, Ref } from "react";
-import { ROOM_WALL, roomM2, selectionBounds, toJo } from "@/lib/geometry";
+import {
+	outlinePath,
+	planBounds,
+	ROOM_WALL,
+	roomM2,
+	selectionBounds,
+	toJo,
+} from "@/lib/geometry";
 import type {
 	Door,
 	Furniture,
@@ -653,6 +660,49 @@ function GridDefs({ step, z }: Scale & { step: number }) {
 	);
 }
 
+// Another floor's footprint, traced around the outside of its walls so wall gaps don't split it.
+function Guide({ rooms, label, z }: Scale & { rooms: Room[]; label: string }) {
+	const outer = rooms.map((room) => ({
+		x: room.x - ROOM_WALL,
+		y: room.y - ROOM_WALL,
+		w: room.w + 2 * ROOM_WALL,
+		h: room.h + 2 * ROOM_WALL,
+	}));
+	const bounds = planBounds(rooms, 0);
+	return (
+		<g data-noexport="1" pointerEvents="none">
+			<g opacity={0.5}>
+				{outer.map((rect, i) => (
+					<rect
+						key={rooms[i].id}
+						x={rect.x}
+						y={rect.y}
+						width={rect.w}
+						height={rect.h}
+						fill={palette.gray200}
+					/>
+				))}
+			</g>
+			<path
+				d={outlinePath(outer)}
+				fill="none"
+				stroke={palette.gray500}
+				strokeWidth={screenPx(1.5, z)}
+				strokeDasharray={`${screenPx(6, z)} ${screenPx(4, z)}`}
+			/>
+			<text
+				x={bounds.x}
+				y={bounds.y + bounds.h + screenPx(16, z)}
+				fontSize={screenPx(11, z)}
+				fontWeight={500}
+				fill={palette.gray500}
+			>
+				{label}
+			</text>
+		</g>
+	);
+}
+
 export type PlanSvgProps = {
 	svgRef: Ref<SVGSVGElement>;
 	items: Item[];
@@ -665,6 +715,7 @@ export type PlanSvgProps = {
 	gridSize: number;
 	showDims: boolean;
 	coarse: boolean;
+	guide?: { rooms: Room[]; label: string };
 };
 
 export function PlanSvg(props: PlanSvgProps) {
@@ -704,6 +755,7 @@ export function PlanSvg(props: PlanSvgProps) {
 					height={40000}
 					fill="url(#gMajor)"
 				/>
+				{props.guide && <Guide {...props.guide} z={z} />}
 				{/* All floors before all walls so shared walls are never covered. */}
 				{rooms.map((room) => (
 					<rect

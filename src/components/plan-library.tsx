@@ -11,8 +11,7 @@ import {
 	Text,
 } from "@chakra-ui/react";
 import { useState } from "react";
-import { roomM2 } from "@/lib/geometry";
-import { type Plan, usePlanStore } from "@/lib/plan-store";
+import { floorM2, type Plan, usePlanStore } from "@/lib/plan-store";
 import { Icon } from "./icon";
 
 export const byUpdated = (plans: Plan[]) =>
@@ -59,9 +58,8 @@ export function PlanLibrary({
 								<Stack gap="0">
 									{byUpdated(plans).map((plan) => {
 										const current = plan.id === curId,
-											m2 = plan.items.reduce(
-												(sum, item) =>
-													item.type === "room" ? sum + roomM2(item) : sum,
+											m2 = plan.floors.reduce(
+												(sum, floor) => sum + floorM2(floor.items),
 												0,
 											),
 											date = new Date(plan.updated);
@@ -85,6 +83,8 @@ export function PlanLibrary({
 														color="fg.muted"
 														fontVariantNumeric="tabular-nums"
 													>
+														{plan.floors.length > 1 &&
+															`${plan.floors.length}フロア · `}
 														{m2.toFixed(1)}㎡ · {date.getFullYear()}/
 														{date.getMonth() + 1}/{date.getDate()}{" "}
 														{pad(date.getHours())}:{pad(date.getMinutes())} 更新

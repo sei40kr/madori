@@ -333,3 +333,45 @@ export function moveWallEnd(
 		? { ...wall, x1: end.x, y1: end.y }
 		: { ...wall, x2: end.x, y2: end.y };
 }
+
+// SVG path of the outline of the union of `rooms`, traced along the grid their edges make.
+export function outlinePath(rooms: Rect[]) {
+	const sorted = (values: number[]) =>
+		[...new Set(values)].sort((a, b) => a - b);
+	const xs = sorted(rooms.flatMap((r) => [r.x, r.x + r.w])),
+		ys = sorted(rooms.flatMap((r) => [r.y, r.y + r.h]));
+	const inside = (i: number, j: number) => {
+		if (i < 0 || j < 0 || i >= xs.length - 1 || j >= ys.length - 1)
+			return false;
+		const cx = (xs[i] + xs[i + 1]) / 2,
+			cy = (ys[j] + ys[j + 1]) / 2;
+		return rooms.some(
+			(r) => cx > r.x && cx < r.x + r.w && cy > r.y && cy < r.y + r.h,
+		);
+	};
+	let d = "";
+	// Merge consecutive boundary cells into one segment per run.
+	for (let j = 0; j < ys.length; j++) {
+		let start: number | null = null;
+		for (let i = 0; i < xs.length; i++) {
+			const edge = i < xs.length - 1 && inside(i, j - 1) !== inside(i, j);
+			if (edge && start === null) start = xs[i];
+			if (!edge && start !== null) {
+				d += `M${start} ${ys[j]}H${xs[i]}`;
+				start = null;
+			}
+		}
+	}
+	for (let i = 0; i < xs.length; i++) {
+		let start: number | null = null;
+		for (let j = 0; j < ys.length; j++) {
+			const edge = j < ys.length - 1 && inside(i - 1, j) !== inside(i, j);
+			if (edge && start === null) start = ys[j];
+			if (!edge && start !== null) {
+				d += `M${xs[i]} ${start}V${ys[j]}`;
+				start = null;
+			}
+		}
+	}
+	return d;
+}

@@ -12,8 +12,8 @@ import {
 } from "@chakra-ui/react";
 import { type RefObject, useState } from "react";
 import { exportPdf, exportPng } from "@/lib/export";
-import { roomM2, toJo } from "@/lib/geometry";
-import { usePlanStore } from "@/lib/plan-store";
+import { toJo } from "@/lib/geometry";
+import { floorM2, floorName, usePlanStore } from "@/lib/plan-store";
 import { Icon } from "./icon";
 import { byUpdated, PlanLibrary } from "./plan-library";
 
@@ -27,15 +27,15 @@ export function Header({
 	const recent = byUpdated(
 		store.plans.filter((plan) => plan.id !== store.curId),
 	).slice(0, 5);
-	const totalM2 = store.items.reduce(
-		(sum, item) => (item.type === "room" ? sum + roomM2(item) : sum),
-		0,
-	);
+	const floors =
+		store.plans.find((plan) => plan.id === store.curId)?.floors ?? [];
+	const totalM2 = floors.reduce((sum, floor) => sum + floorM2(floor.items), 0);
 	const exportWith = (write: typeof exportPng) => {
 		if (svgRef.current)
 			write(svgRef.current, {
 				items: store.items,
 				name: store.name,
+				floor: floors.length > 1 ? floorName(store.floor) : undefined,
 				view: store.view,
 			});
 	};

@@ -5,12 +5,13 @@ import {
 	MIN_SIZE,
 	pillarSnap,
 	planBounds,
+	roomM2,
 	shift,
 	snap,
 	wallAt,
 } from "./geometry";
 import { FURNITURE } from "./presets";
-import { sample } from "./sample";
+import { sample, sample2 } from "./sample";
 import type { Item, Line, Point, Rect, Tool, View } from "./types";
 
 export const GRID = 10;
@@ -18,16 +19,29 @@ export const GRID = 10;
 type Dimension = "w" | "h" | "len";
 type Patch = Partial<Item> | ((item: Item) => Partial<Item>);
 
-export type Plan = { id: string; name: string; items: Item[]; updated: number };
+// A floor's name is its position: the first is 1階.
+export type Floor = { id: string; items: Item[] };
+export type Plan = {
+	id: string;
+	name: string;
+	floors: Floor[];
+	updated: number;
+};
+// The plan's floors on one side of a change, the floor to open when returning to them,
+// and the floor to open when returning to the other side.
+type Step = { floors: Floor[]; focus: number; otherFocus: number };
 
 type PlanState = {
-	// The open plan's items and name; kept in sync with its entry in `plans`.
+	// The open floor's items and the open plan's name; kept in sync with their entry in `plans`.
 	items: Item[];
 	name: string;
 	plans: Plan[];
 	curId: string;
-	past: Item[][];
-	future: Item[][];
+	floor: number;
+	// One history for the whole plan, so floor edits and floor additions, deletions and moves undo in order.
+	past: Step[];
+	future: Step[];
+	showGuide: boolean;
 	sel: string | null;
 	tool: Tool;
 	view: View;
@@ -47,6 +61,11 @@ type PlanState = {
 	newPlan: () => void;
 	openPlan: (id: string) => void;
 	deletePlan: (id: string) => void;
+	openFloor: (index: number) => void;
+	addFloor: () => void;
+	deleteFloor: () => void;
+	moveFloor: (from: number, to: number) => void;
+	toggleGuide: () => void;
 	setName: (name: string) => void;
 	select: (id: string | null) => void;
 	setTool: (tool: Tool) => void;
@@ -76,23 +95,35 @@ type PlanState = {
 const uid = () =>
 	`i${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
-// State for a just-opened plan; undo history and tool state never carry over between plans.
-const open = (plan: Plan) => ({
-	items: plan.items,
-	name: plan.name,
-	curId: plan.id,
-	past: [],
-	future: [],
+export const floorName = (index: number) => `${index + 1}階`;
+export const floorM2 = (items: Item[]) =>
+	items.reduce(
+		(sum, item) => (item.type === "room" ? sum + roomM2(item) : sum),
+		0,
+	);
+
+// State for a just-opened floor; tool state never carries over between floors.
+const openFloor = (floors: Floor[], index: number) => ({
+	items: floors[index].items,
+	floor: index,
 	sel: null,
 	tool: "select" as const,
 	draft: null,
 	draftLine: null,
 	lastEdit: null,
 });
+// State for a just-opened plan; undo history never carries over between plans.
+const open = (plan: Plan) => ({
+	...openFloor(plan.floors, 0),
+	name: plan.name,
+	curId: plan.id,
+	past: [],
+	future: [],
+});
 const blank = (): Plan => ({
 	id: uid(),
 	name: "新しい間取り",
-	items: [],
+	floors: [{ id: uid(), items: [] }],
 	updated: Date.now(),
 });
 
@@ -110,14 +141,62 @@ export const usePlanStore = create<PlanState>()(
 			const first: Plan = {
 				id: uid(),
 				name: "わが家の間取り",
-				items: sample(),
+				// Fixed ids: floor ids reach the DOM, so random ones break hydration.
+				floors: [
+					{ id: "f0", items: sample() },
+					{ id: "f1", items: sample2() },
+				],
 				updated: Date.now(),
+			};
+			const floors = () =>
+				get().plans.find((plan) => plan.id === get().curId)?.floors ?? [];
+			const withFloors = (next: Floor[]) =>
+				get().plans.map((plan) =>
+					plan.id === get().curId
+						? { ...plan, floors: next, updated: Date.now() }
+						: plan,
+				);
+			const pushed = (step: Step) => ({
+				past: [...get().past.slice(-99), step],
+				future: [],
+				lastEdit: null,
+			});
+			// Replaces the floors and opens `index`; `focus` makes it an undoable change touching floor `focus[0]` before and `focus[1]` after.
+			const setFloors = (
+				next: Floor[],
+				index: number,
+				focus?: [number, number],
+			) =>
+				set({
+					...(focus &&
+						pushed({
+							floors: floors(),
+							focus: focus[0],
+							otherFocus: focus[1],
+						})),
+					plans: withFloors(next),
+					...openFloor(next, index),
+				});
+			// Swaps in one side of a change and opens the floor it touched; `reverse` leads back.
+			const travel = (step: Step) => {
+				const items = step.floors[step.focus].items;
+				return {
+					reverse: {
+						floors: floors(),
+						focus: step.otherFocus,
+						otherFocus: step.focus,
+					},
+					plans: withFloors(step.floors),
+					items,
+					floor: step.focus,
+					sel: items.some((item) => item.id === get().sel) ? get().sel : null,
+					lastEdit: null,
+				};
 			};
 			return {
 				...open(first),
 				plans: [first],
-				past: [],
-				future: [],
+				showGuide: true,
 				sel: null,
 				tool: "select",
 				view: { ox: 80, oy: 80, z: 0.8 },
@@ -132,51 +211,46 @@ export const usePlanStore = create<PlanState>()(
 					const now = Date.now(),
 						last = get().lastEdit;
 					const coalesce = key && last?.key === key && now - last.at < 1200;
+					const { floor } = get();
 					set((state) => ({
+						...(!coalesce &&
+							pushed({ floors: floors(), focus: floor, otherFocus: floor })),
 						items: next(state.items),
-						past: coalesce
-							? state.past
-							: [...state.past.slice(-99), state.items],
-						future: coalesce ? state.future : [],
 						lastEdit: key ? { key, at: now } : null,
 					}));
 				},
 				// Drags change items live without history, then record the pre-drag items once.
 				preview: (items) => set({ items }),
-				record: (before) =>
-					set((state) => ({
-						past: [...state.past.slice(-99), before],
-						future: [],
-						lastEdit: null,
-					})),
-				undo: () =>
-					set((state) => {
-						const restored = state.past.at(-1);
-						if (!restored) return {};
-						return {
-							items: restored,
-							past: state.past.slice(0, -1),
-							future: [state.items, ...state.future],
-							sel: restored.some((item) => item.id === state.sel)
-								? state.sel
-								: null,
-							lastEdit: null,
-						};
-					}),
-				redo: () =>
-					set((state) => {
-						const [restored, ...future] = state.future;
-						if (!restored) return {};
-						return {
-							items: restored,
-							past: [...state.past, state.items],
-							future,
-							sel: restored.some((item) => item.id === state.sel)
-								? state.sel
-								: null,
-							lastEdit: null,
-						};
-					}),
+				record: (before) => {
+					const { floor } = get();
+					set(
+						pushed({
+							floors: floors().map((f, i) =>
+								i === floor ? { ...f, items: before } : f,
+							),
+							focus: floor,
+							otherFocus: floor,
+						}),
+					);
+				},
+				undo: () => {
+					const { past, future } = get(),
+						step = past.at(-1);
+					if (!step) return;
+					const { reverse, ...state } = travel(step);
+					set({
+						...state,
+						past: past.slice(0, -1),
+						future: [reverse, ...future],
+					});
+				},
+				redo: () => {
+					const { past, future } = get(),
+						[step, ...rest] = future;
+					if (!step) return;
+					const { reverse, ...state } = travel(step);
+					set({ ...state, past: [...past, reverse], future: rest });
+				},
 				newPlan: () => {
 					const plan = blank();
 					set((state) => ({ ...open(plan), plans: [plan, ...state.plans] }));
@@ -194,6 +268,38 @@ export const usePlanStore = create<PlanState>()(
 					const plan = blank();
 					set({ ...open(plan), plans: [plan] });
 				},
+				openFloor: (index) => {
+					if (index !== get().floor && floors()[index])
+						setFloors(floors(), index);
+				},
+				addFloor: () => {
+					const next = [...floors(), { id: uid(), items: [] }];
+					setFloors(next, next.length - 1, [get().floor, next.length - 1]);
+				},
+				// Opens the floor below the deleted one.
+				deleteFloor: () => {
+					const { floor } = get();
+					if (floors().length < 2) return;
+					const below = Math.max(0, floor - 1);
+					setFloors(
+						floors().filter((_, i) => i !== floor),
+						below,
+						[floor, below],
+					);
+				},
+				// The open floor stays open wherever it moves.
+				moveFloor: (from, to) => {
+					const next = [...floors()],
+						openId = next[get().floor].id;
+					if (from === to || !next[from] || !next[to]) return;
+					next.splice(to, 0, ...next.splice(from, 1));
+					setFloors(
+						next,
+						next.findIndex((f) => f.id === openId),
+						[from, to],
+					);
+				},
+				toggleGuide: () => set((state) => ({ showGuide: !state.showGuide })),
 				setName: (name) => set({ name }),
 				select: (id) =>
 					set((state) => ({ sel: id, tool: id ? "select" : state.tool })),
@@ -410,22 +516,43 @@ export const usePlanStore = create<PlanState>()(
 		},
 		{
 			name: "madori.plan.v1",
-			version: 1,
-			partialize: (state) => ({ plans: state.plans, curId: state.curId }),
-			// v0 held a single plan; keep it as the first saved plan.
+			version: 2,
+			partialize: (state) => ({
+				plans: state.plans,
+				curId: state.curId,
+				showGuide: state.showGuide,
+			}),
 			migrate: (persisted, version) => {
-				if (version > 0) return persisted;
-				const { items, name } = persisted as { items: Item[]; name: string };
-				const id = uid();
-				return { plans: [{ id, name, items, updated: Date.now() }], curId: id };
+				type V1 = {
+					plans: (Omit<Plan, "floors"> & { items: Item[] })[];
+					curId: string;
+				};
+				let state = persisted as V1;
+				// v0 held a single plan; keep it as the first saved plan.
+				if (version < 1) {
+					const { items, name } = persisted as { items: Item[]; name: string };
+					const id = uid();
+					state = {
+						plans: [{ id, name, items, updated: Date.now() }],
+						curId: id,
+					};
+				}
+				// v1 plans held one floor's items.
+				return {
+					...state,
+					plans: state.plans.map(({ items, ...plan }) =>
+						version < 2 ? { ...plan, floors: [{ id: uid(), items }] } : plan,
+					),
+				} as Pick<PlanState, "plans" | "curId" | "showGuide">;
 			},
 			merge: (persisted, current) => {
-				const { plans, curId } = persisted as Pick<
-					PlanState,
-					"plans" | "curId"
-				>;
+				const {
+					plans,
+					curId,
+					showGuide = true,
+				} = persisted as Pick<PlanState, "plans" | "curId" | "showGuide">;
 				const plan = plans.find((p) => p.id === curId) ?? plans[0];
-				return plan ? { ...current, plans, ...open(plan) } : current;
+				return plan ? { ...current, plans, showGuide, ...open(plan) } : current;
 			},
 			// Hydrated after mount so the server render and the first client render match.
 			skipHydration: true,
@@ -433,13 +560,21 @@ export const usePlanStore = create<PlanState>()(
 	),
 );
 
-// Saves edits to the open plan back into its entry as they happen.
-usePlanStore.subscribe(({ items, name, plans, curId }) => {
+// Saves edits to the open floor back into its plan's entry as they happen.
+usePlanStore.subscribe(({ items, name, plans, curId, floor }) => {
 	const plan = plans.find((p) => p.id === curId);
-	if (!plan || (plan.items === items && plan.name === name)) return;
+	if (!plan || (plan.floors[floor]?.items === items && plan.name === name))
+		return;
 	usePlanStore.setState({
 		plans: plans.map((p) =>
-			p.id === curId ? { ...p, items, name, updated: Date.now() } : p,
+			p.id === curId
+				? {
+						...p,
+						name,
+						floors: p.floors.map((f, i) => (i === floor ? { ...f, items } : f)),
+						updated: Date.now(),
+					}
+				: p,
 		),
 	});
 });

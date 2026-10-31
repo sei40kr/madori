@@ -10,6 +10,7 @@ import {
 	Folder,
 	Grid2x2,
 	Image,
+	Layers,
 	type LucideIcon,
 	Maximize,
 	Minus,
@@ -58,6 +59,7 @@ const ICONS: Record<string, LucideIcon> = {
 	pillar: Pillar,
 	folder: Folder,
 	chevron: ChevronDown,
+	layers: Layers,
 };
 
 export function Icon({ name, size = 16 }: { name: string; size?: number }) {
