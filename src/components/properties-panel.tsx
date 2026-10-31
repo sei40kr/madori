@@ -2,11 +2,13 @@ import {
 	Badge,
 	Box,
 	Button,
+	Dialog,
 	Field,
 	Flex,
 	Grid,
 	IconButton,
 	Input,
+	Portal,
 	SegmentGroup,
 	SimpleGrid,
 	Stack,
@@ -117,6 +119,88 @@ const SEL_META: Record<Item["type"], string> = {
 	door: "壁に沿ってドラッグで移動",
 	window: "壁に沿ってドラッグで移動",
 };
+
+// Moves the selection by an offset in metres; negative values go left or up.
+function MoveDialog({ onMove }: { onMove: (dx: number, dy: number) => void }) {
+	const [open, setOpen] = useState(false);
+	const [dx, setDx] = useState("0");
+	const [dy, setDy] = useState("0");
+	const cm = (text: string) => Math.round((parseFloat(text) || 0) * 1000) / 10;
+	return (
+		<Dialog.Root
+			open={open}
+			onOpenChange={(event) => {
+				setOpen(event.open);
+				if (event.open) {
+					setDx("0");
+					setDy("0");
+				}
+			}}
+			size="xs"
+			placement="center"
+		>
+			<Dialog.Trigger asChild>
+				<Button size="xs" variant="outline">
+					<Icon name="move" size={14} />
+					移動
+				</Button>
+			</Dialog.Trigger>
+			<Portal>
+				<Dialog.Backdrop />
+				<Dialog.Positioner>
+					<Dialog.Content
+						as="form"
+						onSubmit={(event) => {
+							event.preventDefault();
+							onMove(cm(dx), cm(dy));
+							setOpen(false);
+						}}
+					>
+						<Dialog.Header>
+							<Dialog.Title>移動</Dialog.Title>
+						</Dialog.Header>
+						<Dialog.Body>
+							<SimpleGrid columns={2} gap="3">
+								{(
+									[
+										["右へ (m)", dx, setDx],
+										["下へ (m)", dy, setDy],
+									] as const
+								).map(([label, value, set]) => (
+									<Field.Root key={label}>
+										<Field.Label>{label}</Field.Label>
+										<Input
+											size="sm"
+											type="number"
+											step="0.05"
+											inputMode="decimal"
+											value={value}
+											onChange={(event) => set(event.target.value)}
+											fontVariantNumeric="tabular-nums"
+										/>
+									</Field.Root>
+								))}
+							</SimpleGrid>
+							<Text textStyle="xs" color="fg.muted" mt="2">
+								左・上へはマイナスで指定します。
+							</Text>
+						</Dialog.Body>
+						<Dialog.Footer>
+							<Dialog.ActionTrigger asChild>
+								<Button size="sm" variant="outline">
+									キャンセル
+								</Button>
+							</Dialog.ActionTrigger>
+							<Button size="sm" type="submit" disabled={!cm(dx) && !cm(dy)}>
+								移動
+							</Button>
+						</Dialog.Footer>
+					</Dialog.Content>
+				</Dialog.Positioner>
+			</Portal>
+		</Dialog.Root>
+	);
+}
 
 export function SelectionPanel() {
 	const store = usePlanStore();
@@ -311,6 +395,7 @@ export function SelectionPanel() {
 						向きを反転
 					</Button>
 				)}
+				<MoveDialog onMove={store.nudge} />
 				<Button size="xs" variant="outline" onClick={store.duplicate}>
 					<Icon name="copy" size={14} />
 					複製
