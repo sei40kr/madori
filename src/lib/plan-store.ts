@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
+	attachedTo,
 	boundsOf,
 	MIN_SIZE,
 	pillarSnap,
@@ -447,13 +448,13 @@ export const usePlanStore = create<PlanState>()(
 				nudge: (dx, dy) => {
 					const id = get().sel;
 					if (!id) return;
-					get().commit(
-						(items) =>
-							items.map((item) =>
-								item.id === id ? shift(item, dx, dy) : item,
-							),
-						`${id}:nudge`,
-					);
+					get().commit((items) => {
+						const host = items.find((item) => item.id === id);
+						const moved = host ? [id, ...attachedTo(host, items)] : [];
+						return items.map((item) =>
+							moved.includes(item.id) ? shift(item, dx, dy) : item,
+						);
+					}, `${id}:nudge`);
 				},
 				duplicate: () => {
 					const item = selected();
