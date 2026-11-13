@@ -8,15 +8,41 @@ import {
 	Tabs,
 	Text,
 } from "@chakra-ui/react";
-import { useState } from "react";
-import { floorName, usePlanStore } from "@/lib/plan-store";
+import { memo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { floorName, openFloors, usePlanStore } from "@/lib/plan-store";
 import { Icon } from "./icon";
 
 // Floor tabs (drag to reorder), add/delete, and the toggle for the first floor's outline.
-export function FloorBar() {
-	const store = usePlanStore();
-	const floors =
-		store.plans.find((plan) => plan.id === store.curId)?.floors ?? [];
+// Memoised with narrow selectors so drags, which re-render Canvas on every move, skip it.
+export const FloorBar = memo(function FloorBar() {
+	const store = usePlanStore(
+		useShallow(
+			({
+				floor,
+				showGuide,
+				openFloor,
+				moveFloor,
+				addFloor,
+				deleteFloor,
+				toggleGuide,
+			}) => ({
+				floor,
+				showGuide,
+				openFloor,
+				moveFloor,
+				addFloor,
+				deleteFloor,
+				toggleGuide,
+			}),
+		),
+	);
+	const floors = usePlanStore(
+		useShallow((state) => openFloors(state).map((floor) => floor.id)),
+	);
+	const groundHasRoom = usePlanStore((state) =>
+		openFloors(state)[0]?.items.some((item) => item.type === "room"),
+	);
 	const [drag, setDrag] = useState<{ from: number; over: number } | null>(null);
 	const multi = floors.length > 1,
 		current = floorName(store.floor);
@@ -32,10 +58,8 @@ export function FloorBar() {
 			zIndex="12"
 		>
 			<Tabs.Root
-				value={floors[store.floor]?.id ?? null}
-				onValueChange={({ value }) =>
-					store.openFloor(floors.findIndex((floor) => floor.id === value))
-				}
+				value={floors[store.floor] ?? null}
+				onValueChange={({ value }) => store.openFloor(floors.indexOf(value))}
 				variant="enclosed"
 				size="sm"
 				// The recipe's horizontal display rule outranks a plain `display` prop.
@@ -63,12 +87,12 @@ export function FloorBar() {
 					rounded="l2"
 					css={{ scrollbarWidth: "none" }}
 				>
-					{floors.map((floor, i) => {
+					{floors.map((id, i) => {
 						const over = drag && drag.over === i && drag.from !== i;
 						return (
 							<Tabs.Trigger
-								key={floor.id}
-								value={floor.id}
+								key={id}
+								value={id}
 								title="ドラッグで順序を変更"
 								draggable
 								minW="44px"
@@ -126,30 +150,29 @@ export function FloorBar() {
 					<Icon name="trash" />
 				</IconButton>
 			</Tabs.Root>
-			{store.floor > 0 &&
-				floors[0]?.items.some((item) => item.type === "room") && (
-					<Switch.Root
-						size="sm"
-						checked={store.showGuide}
-						onCheckedChange={store.toggleGuide}
-						h="8"
-						px="3"
-						bg="bg"
-						borderWidth="1px"
-						rounded="l2"
-						shadow="xs"
-						title={`${floorName(0)}の外形を表示`}
-					>
-						<Switch.HiddenInput />
-						<Switch.Label fontWeight="medium">外形</Switch.Label>
-						<Switch.Control>
-							<Switch.Thumb />
-						</Switch.Control>
-					</Switch.Root>
-				)}
+			{store.floor > 0 && groundHasRoom && (
+				<Switch.Root
+					size="sm"
+					checked={store.showGuide}
+					onCheckedChange={store.toggleGuide}
+					h="8"
+					px="3"
+					bg="bg"
+					borderWidth="1px"
+					rounded="l2"
+					shadow="xs"
+					title={`${floorName(0)}の外形を表示`}
+				>
+					<Switch.HiddenInput />
+					<Switch.Label fontWeight="medium">外形</Switch.Label>
+					<Switch.Control>
+						<Switch.Thumb />
+					</Switch.Control>
+				</Switch.Root>
+			)}
 		</Flex>
 	);
-}
+});
 
 export function ToolHint({
 	hint,
@@ -192,15 +215,13 @@ export function ToolHint({
 	);
 }
 
-export function ZoomControls({
+export const ZoomControls = memo(function ZoomControls({
 	zoom,
-	onZoomIn,
-	onZoomOut,
+	onZoom,
 	onFit,
 }: {
 	zoom: number;
-	onZoomIn: () => void;
-	onZoomOut: () => void;
+	onZoom: (factor: number) => void;
 	onFit: () => void;
 }) {
 	return (
@@ -220,7 +241,7 @@ export function ZoomControls({
 				variant="ghost"
 				aria-label="縮小"
 				title="縮小"
-				onClick={onZoomOut}
+				onClick={() => onZoom(0.8)}
 			>
 				<Icon name="minus" />
 			</IconButton>
@@ -239,7 +260,7 @@ export function ZoomControls({
 				variant="ghost"
 				aria-label="拡大"
 				title="拡大"
-				onClick={onZoomIn}
+				onClick={() => onZoom(1.25)}
 			>
 				<Icon name="plus" />
 			</IconButton>
@@ -255,4 +276,4 @@ export function ZoomControls({
 			</IconButton>
 		</Flex>
 	);
-}
+});

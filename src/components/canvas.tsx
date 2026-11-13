@@ -1,6 +1,12 @@
 import { Box } from "@chakra-ui/react";
 import { useGesture } from "@use-gesture/react";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import {
+	type RefObject,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import {
 	attachedTo,
 	axisLock,
@@ -91,14 +97,16 @@ export function Canvas({
 		const { ox, oy, z } = usePlanStore.getState().view;
 		return { x: (x - ox) / z, y: (y - oy) / z };
 	};
-	const fit = () => {
+	// Stable so the memoised ZoomControls skips the re-render on every drag move.
+	const fit = useCallback(() => {
 		const rect = containerRef.current?.getBoundingClientRect();
-		if (rect?.width) store.fit(rect.width, rect.height);
-	};
-	const zoomCentre = (factor: number) => {
+		if (rect?.width) usePlanStore.getState().fit(rect.width, rect.height);
+	}, []);
+	const zoomCentre = useCallback((factor: number) => {
 		const rect = containerRef.current?.getBoundingClientRect();
-		if (rect) store.zoomAt(rect.width / 2, rect.height / 2, factor);
-	};
+		if (rect)
+			usePlanStore.getState().zoomAt(rect.width / 2, rect.height / 2, factor);
+	}, []);
 
 	// Fits the plan once the canvas first has a size.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: runs once on mount
@@ -307,7 +315,12 @@ export function Canvas({
 			case "resize":
 				replace(
 					current.before,
-					resizeItem(current.original, current.handle, point, GRID),
+					resizeItem(
+						current.original,
+						current.handle,
+						point,
+						current.original.type === "furniture" ? 1 : GRID,
+					),
 				);
 				break;
 			case "wallEnd":
@@ -447,12 +460,7 @@ export function Canvas({
 			{hint && (
 				<ToolHint hint={hint} onCancel={() => store.setTool("select")} />
 			)}
-			<ZoomControls
-				zoom={store.view.z}
-				onZoomIn={() => zoomCentre(1.25)}
-				onZoomOut={() => zoomCentre(0.8)}
-				onFit={fit}
-			/>
+			<ZoomControls zoom={store.view.z} onZoom={zoomCentre} onFit={fit} />
 		</Box>
 	);
 }

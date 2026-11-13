@@ -10,7 +10,7 @@ import {
 	Stack,
 	Text,
 } from "@chakra-ui/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { floorM2, type Plan, usePlanStore } from "@/lib/plan-store";
 import { Icon } from "./icon";
 
@@ -26,7 +26,12 @@ export function PlanLibrary({
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const plans = usePlanStore((state) => state.plans);
+	// Frozen while closed, since drags rewrite `plans` on every move.
+	const shown = useRef<Plan[]>([]);
+	const plans = usePlanStore((state) => {
+		if (open) shown.current = state.plans;
+		return shown.current;
+	});
 	const curId = usePlanStore((state) => state.curId);
 	const openPlan = usePlanStore((state) => state.openPlan);
 	const newPlan = usePlanStore((state) => state.newPlan);

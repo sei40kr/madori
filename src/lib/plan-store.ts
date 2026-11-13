@@ -97,6 +97,8 @@ const uid = () =>
 	`i${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 export const floorName = (index: number) => `${index + 1}階`;
+export const openFloors = (state: PlanState) =>
+	state.plans.find((plan) => plan.id === state.curId)?.floors ?? [];
 export const floorM2 = (items: Item[]) =>
 	items.reduce(
 		(sum, item) => (item.type === "room" ? sum + roomM2(item) : sum),
@@ -384,8 +386,8 @@ export const usePlanStore = create<PlanState>()(
 						type: "furniture",
 						kind: "other",
 						name: FURNITURE.other.label,
-						cx: snap(point.x, GRID),
-						cy: snap(point.y, GRID),
+						cx: Math.round(point.x),
+						cy: Math.round(point.y),
 						w: 90,
 						h: 45,
 					}),

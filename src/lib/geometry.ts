@@ -270,7 +270,7 @@ export function axisLock(anchor: Point, point: Point, step: number): Point {
 		: { x: anchor.x, y };
 }
 
-// Moves an item by a raw offset. Pillars stick to room corners and doors and windows to walls when close enough.
+// Moves an item by a raw offset. Pillars stick to room corners and doors and windows to walls when close enough; furniture moves freely to the nearest centimetre.
 export function moveItem(
 	item: Item,
 	dx: number,
@@ -292,6 +292,8 @@ export function moveItem(
 		const anchor = wallAt(item.x + dx, item.y + dy, items, step);
 		if (anchor) return { ...item, ...anchor };
 	}
+	if (item.type === "furniture")
+		return shift(item, Math.round(dx), Math.round(dy));
 	return shift(item, snap(dx, step), snap(dy, step));
 }
 

@@ -16,6 +16,7 @@ import {
 	Text,
 } from "@chakra-ui/react";
 import { useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { roomM2, toJo } from "@/lib/geometry";
 import { floorName, usePlanStore } from "@/lib/plan-store";
 import { FURNITURE, PILLAR_SIZES } from "@/lib/presets";
@@ -203,8 +204,36 @@ function MoveDialog({ onMove }: { onMove: (dx: number, dy: number) => void }) {
 }
 
 export function SelectionPanel() {
-	const store = usePlanStore();
-	const sel = store.items.find((item) => item.id === store.sel);
+	const store = usePlanStore(
+		useShallow(
+			({
+				update,
+				setSize,
+				setDimension,
+				setWallLength,
+				nudge,
+				duplicate,
+				remove,
+			}) => ({
+				update,
+				setSize,
+				setDimension,
+				setWallLength,
+				nudge,
+				duplicate,
+				remove,
+			}),
+		),
+	);
+	// The panel shows no position, so blanking it lets drags that only move the selection skip re-rendering.
+	const sel = usePlanStore(
+		useShallow((state) => {
+			const item = state.items.find((item) => item.id === state.sel);
+			return item && item.type !== "wall"
+				? { ...item, x: 0, y: 0, cx: 0, cy: 0 }
+				: item;
+		}),
+	);
 	if (!sel) return null;
 	const isFixture = sel.type === "door" || sel.type === "window";
 	const hasSize =

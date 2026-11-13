@@ -11,9 +11,10 @@ import {
 	Text,
 } from "@chakra-ui/react";
 import { type RefObject, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { exportPdf, exportPng } from "@/lib/export";
 import { toJo } from "@/lib/geometry";
-import { floorM2, floorName, usePlanStore } from "@/lib/plan-store";
+import { floorM2, floorName, openFloors, usePlanStore } from "@/lib/plan-store";
 import { Icon } from "./icon";
 import { byUpdated, PlanLibrary } from "./plan-library";
 
@@ -22,21 +23,42 @@ export function Header({
 }: {
 	svgRef: RefObject<SVGSVGElement | null>;
 }) {
-	const store = usePlanStore();
+	// Narrow selectors keep drags, which replace `items` on every move, from re-rendering the header.
+	const store = usePlanStore(
+		useShallow(
+			({ name, past, future, newPlan, openPlan, setName, undo, redo }) => ({
+				name,
+				past,
+				future,
+				newPlan,
+				openPlan,
+				setName,
+				undo,
+				redo,
+			}),
+		),
+	);
 	const [libraryOpen, setLibraryOpen] = useState(false);
-	const recent = byUpdated(
-		store.plans.filter((plan) => plan.id !== store.curId),
-	).slice(0, 5);
-	const floors =
-		store.plans.find((plan) => plan.id === store.curId)?.floors ?? [];
-	const totalM2 = floors.reduce((sum, floor) => sum + floorM2(floor.items), 0);
+	const recent = usePlanStore(
+		useShallow((state) =>
+			byUpdated(state.plans.filter((plan) => plan.id !== state.curId)).slice(
+				0,
+				5,
+			),
+		),
+	);
+	const totalM2 = usePlanStore((state) =>
+		openFloors(state).reduce((sum, floor) => sum + floorM2(floor.items), 0),
+	);
 	const exportWith = (write: typeof exportPng) => {
+		const state = usePlanStore.getState();
 		if (svgRef.current)
 			write(svgRef.current, {
-				items: store.items,
-				name: store.name,
-				floor: floors.length > 1 ? floorName(store.floor) : undefined,
-				view: store.view,
+				items: state.items,
+				name: state.name,
+				floor:
+					openFloors(state).length > 1 ? floorName(state.floor) : undefined,
+				view: state.view,
 			});
 	};
 	return (
