@@ -3,6 +3,7 @@ import type {
 	Door,
 	Furniture,
 	Item,
+	Line,
 	Pillar,
 	Point,
 	Rect,
@@ -130,7 +131,7 @@ export function planBounds(items: Item[], margin: number): Rect {
 	};
 }
 
-type Edge = { axis: Axis; at: number; from: number; to: number };
+export type Edge = { axis: Axis; at: number; from: number; to: number };
 
 export function wallEdge(wall: Wall): Edge[] {
 	if (wall.y1 === wall.y2)
@@ -253,6 +254,66 @@ export function pillarSnap(
 	return best;
 }
 
+const rectEdges = ({ x, y, w, h }: Rect): Edge[] => [
+	{ axis: "h", at: y, from: x, to: x + w },
+	{ axis: "h", at: y + h, from: x, to: x + w },
+	{ axis: "v", at: x, from: y, to: y + h },
+	{ axis: "v", at: x + w, from: y, to: y + h },
+];
+
+// Faces furniture snaps to: room interiors, both faces of partitions, and the outlines of pillars and other furniture.
+export const snapFaces = (items: Item[], skip: string) =>
+	items.flatMap((item) =>
+		item.id === skip || item.type === "door" || item.type === "window"
+			? []
+			: rectEdges(boundsOf(item)),
+	);
+
+// Shortest shift within `tol` that puts one of `edges` on an `axis` face overlapping from–to, or null.
+function snapEdge(
+	edges: number[],
+	from: number,
+	to: number,
+	faces: Edge[],
+	axis: Axis,
+	tol: number,
+) {
+	let best: number | null = null;
+	for (const face of faces) {
+		if (face.axis !== axis || face.from > to || face.to < from) continue;
+		for (const edge of edges) {
+			const delta = face.at - edge;
+			if (
+				Math.abs(delta) <= tol &&
+				(best === null || Math.abs(delta) < Math.abs(best))
+			)
+				best = delta;
+		}
+	}
+	return best;
+}
+
+// Guide lines along every face an edge of `box` lies on, spanning both the face and the box.
+export function snapGuides(box: Rect, faces: Edge[]) {
+	const guides: Line[] = [];
+	for (const face of faces) {
+		const [edges, from, to] =
+			face.axis === "v"
+				? [[box.x, box.x + box.w], box.y, box.y + box.h]
+				: [[box.y, box.y + box.h], box.x, box.x + box.w];
+		if (face.from > to || face.to < from) continue;
+		if (!edges.some((edge) => Math.abs(edge - face.at) < 0.01)) continue;
+		const a = Math.min(face.from, from),
+			b = Math.max(face.to, to);
+		guides.push(
+			face.axis === "v"
+				? { x1: face.at, y1: a, x2: face.at, y2: b }
+				: { x1: a, y1: face.at, x2: b, y2: face.at },
+		);
+	}
+	return guides;
+}
+
 export const MIN_SIZE = {
 	room: 50,
 	furniture: 10,
@@ -270,13 +331,15 @@ export function axisLock(anchor: Point, point: Point, step: number): Point {
 		: { x: anchor.x, y };
 }
 
-// Moves an item by a raw offset. Pillars stick to room corners and doors and windows to walls when close enough; furniture moves freely to the nearest centimetre.
+// Moves an item by a raw offset. Pillars stick to room corners and doors and windows to walls when close enough; furniture edges stick to `faces` within `tol`, or else move to the nearest centimetre.
 export function moveItem(
 	item: Item,
 	dx: number,
 	dy: number,
 	items: Item[],
 	step: number,
+	faces: Edge[] = [],
+	tol = 0,
 ): Item {
 	if (item.type === "pillar") {
 		const corner = pillarSnap(
@@ -292,17 +355,29 @@ export function moveItem(
 		const anchor = wallAt(item.x + dx, item.y + dy, items, step);
 		if (anchor) return { ...item, ...anchor };
 	}
-	if (item.type === "furniture")
-		return shift(item, Math.round(dx), Math.round(dy));
+	if (item.type === "furniture") {
+		const box = boundsOf(item),
+			x1 = box.x + dx,
+			y1 = box.y + dy;
+		const sx = snapEdge([x1, x1 + box.w], y1, y1 + box.h, faces, "v", tol),
+			sy = snapEdge([y1, y1 + box.h], x1, x1 + box.w, faces, "h", tol);
+		return shift(
+			item,
+			sx === null ? Math.round(dx) : dx + sx,
+			sy === null ? Math.round(dy) : dy + sy,
+		);
+	}
 	return shift(item, snap(dx, step), snap(dy, step));
 }
 
-// Moves the edges named in `handle` (any of "n", "s", "e", "w") to `point`, keeping a minimum size.
+// Moves the edges named in `handle` (any of "n", "s", "e", "w") to `point`, keeping a minimum size. An edge within `tol` of one of `faces` sticks to it instead of the grid.
 export function resizeItem<T extends Room | Pillar | Furniture>(
 	item: T,
 	handle: string,
 	point: Point,
 	step: number,
+	faces: Edge[] = [],
+	tol = 0,
 ): T {
 	const bounds = boundsOf(item),
 		min = MIN_SIZE[item.type];
@@ -310,8 +385,12 @@ export function resizeItem<T extends Room | Pillar | Furniture>(
 		y1 = bounds.y,
 		x2 = bounds.x + bounds.w,
 		y2 = bounds.y + bounds.h;
-	const x = snap(point.x, step),
-		y = snap(point.y, step);
+	const fit = (value: number, axis: Axis, from: number, to: number) => {
+		const delta = snapEdge([value], from, to, faces, axis, tol);
+		return delta === null ? snap(value, step) : value + delta;
+	};
+	const x = fit(point.x, "v", y1, y2),
+		y = fit(point.y, "h", x1, x2);
 	if (handle.includes("w")) x1 = Math.min(x, x2 - min);
 	if (handle.includes("e")) x2 = Math.max(x, x1 + min);
 	if (handle.includes("n")) y1 = Math.min(y, y2 - min);

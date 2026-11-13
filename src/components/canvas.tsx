@@ -10,16 +10,21 @@ import {
 import {
 	attachedTo,
 	axisLock,
+	boundsOf,
+	type Edge,
 	moveItem,
 	moveWallEnd,
 	resizeItem,
 	shift,
 	snap,
+	snapFaces,
+	snapGuides,
 } from "@/lib/geometry";
 import { floorName, GRID, usePlanStore } from "@/lib/plan-store";
 import type {
 	Furniture,
 	Item,
+	Line,
 	Pillar,
 	Point,
 	Room,
@@ -41,12 +46,15 @@ type Drag =
 			before: Item[];
 			attached: string[];
 			changed: boolean;
+			// Faces furniture snaps to; empty for other items.
+			faces: Edge[];
 	  }
 	| {
 			mode: "resize";
 			handle: string;
 			original: Room | Pillar | Furniture;
 			before: Item[];
+			faces: Edge[];
 	  }
 	| { mode: "wallEnd"; handle: "p1" | "p2"; original: Wall; before: Item[] };
 
@@ -69,6 +77,9 @@ const HINTS: Partial<Record<Tool, string>> = {
 	window: "壁をクリックして窓を配置",
 };
 
+// Furniture edges snap to faces within this many screen pixels.
+const SNAP_PX = 8;
+
 const ARROWS: Record<string, [number, number]> = {
 	ArrowLeft: [-1, 0],
 	ArrowRight: [1, 0],
@@ -88,6 +99,7 @@ export function Canvas({
 	const spaceHeld = useRef(false);
 	const [panning, setPanning] = useState(false);
 	const [coarse, setCoarse] = useState(false);
+	const [guides, setGuides] = useState<Line[]>([]);
 
 	const local = ([clientX, clientY]: [number, number]): Point => {
 		const rect = svgRef.current?.getBoundingClientRect();
@@ -205,6 +217,7 @@ export function Canvas({
 				before: state.items,
 				attached: attachedTo(item, state.items),
 				changed: false,
+				faces: item.type === "furniture" ? snapFaces(state.items, item.id) : [],
 			};
 		};
 		const tool = state.tool;
@@ -249,7 +262,13 @@ export function Canvas({
 				sel?.type === "pillar" ||
 				sel?.type === "furniture")
 		)
-			return { mode: "resize", handle, original: sel, before: state.items };
+			return {
+				mode: "resize",
+				handle,
+				original: sel,
+				before: state.items,
+				faces: sel.type === "furniture" ? snapFaces(state.items, sel.id) : [],
+			};
 		if (hit) return grab(hit);
 		return { mode: "pan", view: state.view, deselect: true };
 	};
@@ -258,8 +277,14 @@ export function Canvas({
 		current: Drag,
 		point: Point,
 		movement: [number, number],
+		// Alt turns off snapping to faces.
+		alt: boolean,
 	) => {
 		const state = usePlanStore.getState();
+		const faces = "faces" in current && !alt ? current.faces : [],
+			tol = SNAP_PX / state.view.z;
+		const showGuides = (item: Item) =>
+			setGuides(snapGuides(boundsOf(item), faces));
 		const replace = (before: Item[], next: Item) =>
 			state.preview(before.map((item) => (item.id === next.id ? next : item)));
 		switch (current.mode) {
@@ -302,27 +327,39 @@ export function Canvas({
 					Math.hypot(dx, dy) > 5;
 				if (!current.changed) return;
 				state.preview(
-					current.before.map((item) =>
-						item.id === current.id
-							? moveItem(item, dx, dy, current.before, GRID)
-							: current.attached.includes(item.id)
+					current.before.map((item) => {
+						if (item.id !== current.id)
+							return current.attached.includes(item.id)
 								? shift(item, snap(dx, GRID), snap(dy, GRID))
-								: item,
-					),
+								: item;
+						const moved = moveItem(
+							item,
+							dx,
+							dy,
+							current.before,
+							GRID,
+							faces,
+							tol,
+						);
+						showGuides(moved);
+						return moved;
+					}),
 				);
 				break;
 			}
-			case "resize":
-				replace(
-					current.before,
-					resizeItem(
-						current.original,
-						current.handle,
-						point,
-						current.original.type === "furniture" ? 1 : GRID,
-					),
+			case "resize": {
+				const resized = resizeItem(
+					current.original,
+					current.handle,
+					point,
+					current.original.type === "furniture" ? 1 : GRID,
+					faces,
+					tol,
 				);
+				showGuides(resized);
+				replace(current.before, resized);
 				break;
+			}
 			case "wallEnd":
 				replace(
 					current.before,
@@ -333,6 +370,7 @@ export function Canvas({
 
 	const endDrag = (current: Drag, movement: [number, number]) => {
 		const state = usePlanStore.getState();
+		setGuides([]);
 		switch (current.mode) {
 			case "pan":
 				setPanning(false);
@@ -362,11 +400,11 @@ export function Canvas({
 
 	useGesture(
 		{
-			onDrag: ({ event, xy, first, last, movement, pinching }) => {
+			onDrag: ({ event, xy, first, last, movement, pinching, altKey }) => {
 				if (pinching) return;
 				const point = toWorld(local(xy));
 				if (first) drag.current = startDrag(event as PointerEvent, point);
-				else if (drag.current) moveDrag(drag.current, point, movement);
+				else if (drag.current) moveDrag(drag.current, point, movement, altKey);
 				if (last && drag.current) {
 					endDrag(drag.current, movement);
 					drag.current = null;
@@ -380,6 +418,7 @@ export function Canvas({
 					if (current && "before" in current)
 						usePlanStore.getState().preview(current.before);
 					drag.current = null;
+					setGuides([]);
 					store.setDraft(null);
 					store.setDraftLine(null);
 				}
@@ -454,6 +493,7 @@ export function Canvas({
 					showDims
 					coarse={coarse}
 					guide={guide}
+					snapGuides={guides}
 				/>
 			</Box>
 			<FloorBar />

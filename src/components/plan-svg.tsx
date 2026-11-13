@@ -716,6 +716,8 @@ export type PlanSvgProps = {
 	showDims: boolean;
 	coarse: boolean;
 	guide?: { rooms: Room[]; label: string };
+	// Faces the dragged furniture is snapped to.
+	snapGuides: Line[];
 };
 
 export function PlanSvg(props: PlanSvgProps) {
@@ -818,6 +820,15 @@ export function PlanSvg(props: PlanSvgProps) {
 				{props.sel && (
 					<Selection item={props.sel} z={z} coarse={props.coarse} />
 				)}
+				<path
+					data-noexport="1"
+					d={props.snapGuides
+						.map((l) => `M${l.x1} ${l.y1}L${l.x2} ${l.y2}`)
+						.join("")}
+					stroke={palette.blue500}
+					strokeWidth={screenPx(1, z)}
+					pointerEvents="none"
+				/>
 				{props.draftLine && <DraftLine line={props.draftLine} z={z} />}
 				{props.draft && <DraftRoom rect={props.draft} z={z} />}
 			</g>
