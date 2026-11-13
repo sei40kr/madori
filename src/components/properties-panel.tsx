@@ -453,6 +453,7 @@ export function PlanSummary() {
 	);
 	const floor = usePlanStore((state) => state.floor);
 	const select = usePlanStore((state) => state.select);
+	const interior = usePlanStore((state) => state.mode === "interior");
 	const rooms = items.filter((item): item is Room => item.type === "room");
 	const totalM2 = rooms.reduce((sum, room) => sum + roomM2(room), 0);
 	return (
@@ -477,6 +478,7 @@ export function PlanSummary() {
 						gap="2"
 						px="2.5"
 						fontWeight="normal"
+						disabled={interior}
 						onClick={() => select(room.id)}
 					>
 						<Box as="span" flex="1" minW="0" truncate textAlign="left">

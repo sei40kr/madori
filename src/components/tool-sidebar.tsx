@@ -1,10 +1,39 @@
-import { Box, Button, Flex, Kbd, Stack, Text } from "@chakra-ui/react";
-import { usePlanStore } from "@/lib/plan-store";
+import {
+	createListCollection,
+	Flex,
+	Kbd,
+	Listbox,
+	SegmentGroup,
+	Stack,
+	Text,
+} from "@chakra-ui/react";
+import { inMode, type Mode, usePlanStore } from "@/lib/plan-store";
+import type { Tool } from "@/lib/types";
 import { Icon } from "./icon";
+
+const MODES = [
+	{ value: "plan", label: "間取り" },
+	{ value: "interior", label: "インテリア" },
+];
+
+const TOOLS: { value: Tool; label: string; icon: string; key: string }[] = [
+	{ value: "select", label: "選択・移動", icon: "select", key: "V" },
+	{ value: "room", label: "部屋", icon: "room", key: "R" },
+	{ value: "door", label: "ドア", icon: "door", key: "D" },
+	{ value: "window", label: "窓", icon: "window", key: "W" },
+	{ value: "wall", label: "仕切り", icon: "wall", key: "L" },
+	{ value: "pillar", label: "柱", icon: "pillar", key: "P" },
+	{ value: "furniture", label: "家具", icon: "box", key: "F" },
+];
 
 export function ToolSidebar() {
 	const tool = usePlanStore((state) => state.tool);
 	const onSelect = usePlanStore((state) => state.setTool);
+	const mode = usePlanStore((state) => state.mode);
+	const setMode = usePlanStore((state) => state.setMode);
+	const tools = createListCollection({
+		items: TOOLS.filter((item) => inMode(mode, item.value)),
+	});
 	return (
 		<Flex
 			as="aside"
@@ -16,132 +45,45 @@ export function ToolSidebar() {
 			borderRightWidth="1px"
 			overflowY="auto"
 		>
-			<Stack gap="2">
-				<Text textStyle="xs" fontWeight="semibold" color="fg.muted">
+			<SegmentGroup.Root
+				size="sm"
+				value={mode}
+				onValueChange={(event) => event.value && setMode(event.value as Mode)}
+			>
+				<SegmentGroup.Indicator />
+				<SegmentGroup.Items items={MODES} flex="1" whiteSpace="nowrap" />
+			</SegmentGroup.Root>
+			<Listbox.Root
+				collection={tools}
+				value={[tool]}
+				onValueChange={(event) =>
+					event.value[0] && onSelect(event.value[0] as Tool)
+				}
+				variant="plain"
+				gap="2"
+			>
+				<Listbox.Label textStyle="xs" fontWeight="semibold" color="fg.muted">
 					ツール
-				</Text>
-				<Stack gap="0.5">
-					<Button
-						size="sm"
-						variant="ghost"
-						justifyContent="flex-start"
-						gap="2.5"
-						px="2.5"
-						bg={tool === "select" ? "blue.subtle" : undefined}
-						color={tool === "select" ? "blue.fg" : "fg"}
-						aria-pressed={tool === "select"}
-						onClick={() => onSelect("select")}
-					>
-						<Icon name="select" />
-						<Box as="span" flex="1" textAlign="left">
-							選択・移動
-						</Box>
-						<Kbd size="sm">V</Kbd>
-					</Button>
-					<Button
-						size="sm"
-						variant="ghost"
-						justifyContent="flex-start"
-						gap="2.5"
-						px="2.5"
-						bg={tool === "room" ? "blue.subtle" : undefined}
-						color={tool === "room" ? "blue.fg" : "fg"}
-						aria-pressed={tool === "room"}
-						onClick={() => onSelect("room")}
-					>
-						<Icon name="room" />
-						<Box as="span" flex="1" textAlign="left">
-							部屋
-						</Box>
-						<Kbd size="sm">R</Kbd>
-					</Button>
-					<Button
-						size="sm"
-						variant="ghost"
-						justifyContent="flex-start"
-						gap="2.5"
-						px="2.5"
-						bg={tool === "door" ? "blue.subtle" : undefined}
-						color={tool === "door" ? "blue.fg" : "fg"}
-						aria-pressed={tool === "door"}
-						onClick={() => onSelect("door")}
-					>
-						<Icon name="door" />
-						<Box as="span" flex="1" textAlign="left">
-							ドア
-						</Box>
-						<Kbd size="sm">D</Kbd>
-					</Button>
-					<Button
-						size="sm"
-						variant="ghost"
-						justifyContent="flex-start"
-						gap="2.5"
-						px="2.5"
-						bg={tool === "window" ? "blue.subtle" : undefined}
-						color={tool === "window" ? "blue.fg" : "fg"}
-						aria-pressed={tool === "window"}
-						onClick={() => onSelect("window")}
-					>
-						<Icon name="window" />
-						<Box as="span" flex="1" textAlign="left">
-							窓
-						</Box>
-						<Kbd size="sm">W</Kbd>
-					</Button>
-					<Button
-						size="sm"
-						variant="ghost"
-						justifyContent="flex-start"
-						gap="2.5"
-						px="2.5"
-						bg={tool === "wall" ? "blue.subtle" : undefined}
-						color={tool === "wall" ? "blue.fg" : "fg"}
-						aria-pressed={tool === "wall"}
-						onClick={() => onSelect("wall")}
-					>
-						<Icon name="wall" />
-						<Box as="span" flex="1" textAlign="left">
-							仕切り
-						</Box>
-						<Kbd size="sm">L</Kbd>
-					</Button>
-					<Button
-						size="sm"
-						variant="ghost"
-						justifyContent="flex-start"
-						gap="2.5"
-						px="2.5"
-						bg={tool === "pillar" ? "blue.subtle" : undefined}
-						color={tool === "pillar" ? "blue.fg" : "fg"}
-						aria-pressed={tool === "pillar"}
-						onClick={() => onSelect("pillar")}
-					>
-						<Icon name="pillar" />
-						<Box as="span" flex="1" textAlign="left">
-							柱
-						</Box>
-						<Kbd size="sm">P</Kbd>
-					</Button>
-					<Button
-						size="sm"
-						variant="ghost"
-						justifyContent="flex-start"
-						gap="2.5"
-						px="2.5"
-						bg={tool === "furniture" ? "blue.subtle" : undefined}
-						color={tool === "furniture" ? "blue.fg" : "fg"}
-						aria-pressed={tool === "furniture"}
-						onClick={() => onSelect("furniture")}
-					>
-						<Icon name="box" />
-						<Box as="span" flex="1" textAlign="left">
-							家具
-						</Box>
-						<Kbd size="sm">F</Kbd>
-					</Button>
-				</Stack>
-			</Stack>
+				</Listbox.Label>
+				<Listbox.Content p="0" gap="0.5">
+					{tools.items.map((item) => (
+						<Listbox.Item
+							key={item.value}
+							item={item}
+							h="9"
+							gap="2.5"
+							px="2.5"
+							fontWeight="medium"
+							_hover={{ bg: "bg.muted" }}
+							_selected={{ bg: "blue.subtle", color: "blue.fg" }}
+						>
+							<Icon name={item.icon} />
+							<Listbox.ItemText>{item.label}</Listbox.ItemText>
+							<Kbd size="sm">{item.key}</Kbd>
+						</Listbox.Item>
+					))}
+				</Listbox.Content>
+			</Listbox.Root>
 			<Stack mt="auto" gap="1.5" textStyle="xs" color="fg.muted">
 				<Text>Space + ドラッグ / 空白をドラッグ：画面移動</Text>
 				<Text>ホイール・ピンチ：ズーム</Text>

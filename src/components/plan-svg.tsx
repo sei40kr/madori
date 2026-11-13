@@ -7,6 +7,7 @@ import {
 	selectionBounds,
 	toJo,
 } from "@/lib/geometry";
+import type { Mode } from "@/lib/plan-store";
 import type {
 	Door,
 	Furniture,
@@ -708,6 +709,7 @@ export type PlanSvgProps = {
 	view: View;
 	sel: Item | null;
 	tool: string;
+	mode: Mode;
 	draft: Rect | null;
 	draftLine: Line | null;
 	panning: boolean;
@@ -721,7 +723,9 @@ export type PlanSvgProps = {
 
 export function PlanSvg(props: PlanSvgProps) {
 	const { z, ox, oy } = props.view;
-	const cursor = props.tool === "select" ? "move" : undefined;
+	const move = props.tool === "select" ? "move" : undefined,
+		interior = props.mode === "interior",
+		cursor = interior ? undefined : move;
 	const ofType = <T extends ItemType>(type: T) =>
 		props.items.filter(
 			(item): item is Extract<Item, { type: T }> => item.type === type,
@@ -817,9 +821,16 @@ export function PlanSvg(props: PlanSvgProps) {
 					rooms.map((room) => (
 						<RoomDims key={`d${room.id}`} item={room} z={z} />
 					))}
-				{ofType("furniture").map((item) => (
-					<FurnitureShape key={item.id} item={item} z={z} cursor={cursor} />
-				))}
+				{/* Faded and click-through while editing the plan, and left out of its export. */}
+				<g
+					opacity={interior ? undefined : 0.35}
+					pointerEvents={interior ? undefined : "none"}
+					data-noexport={interior ? undefined : "1"}
+				>
+					{ofType("furniture").map((item) => (
+						<FurnitureShape key={item.id} item={item} z={z} cursor={move} />
+					))}
+				</g>
 				{props.showDims &&
 					ofType("wall").map((item) => (
 						<PartitionDims key={`d${item.id}`} item={item} z={z} />

@@ -31,6 +31,10 @@ export type Plan = {
 // The plan's floors on one side of a change, the floor to open when returning to them,
 // and the floor to open when returning to the other side.
 type Step = { floors: Floor[]; focus: number; otherFocus: number };
+// 間取り edits rooms, walls, pillars and fixtures; インテリア edits furniture.
+export type Mode = "plan" | "interior";
+export const inMode = (mode: Mode, type: Tool) =>
+	type === "select" || (type === "furniture") === (mode === "interior");
 
 type PlanState = {
 	// The open floor's items and the open plan's name; kept in sync with their entry in `plans`.
@@ -43,6 +47,8 @@ type PlanState = {
 	past: Step[];
 	future: Step[];
 	showGuide: boolean;
+	// Not saved and not undone.
+	mode: Mode;
 	sel: string | null;
 	tool: Tool;
 	view: View;
@@ -67,6 +73,7 @@ type PlanState = {
 	deleteFloor: () => void;
 	moveFloor: (from: number, to: number) => void;
 	toggleGuide: () => void;
+	setMode: (mode: Mode) => void;
 	setName: (name: string) => void;
 	select: (id: string | null) => void;
 	setTool: (tool: Tool) => void;
@@ -200,6 +207,7 @@ export const usePlanStore = create<PlanState>()(
 				...open(first),
 				plans: [first],
 				showGuide: true,
+				mode: "plan",
 				sel: null,
 				tool: "select",
 				view: { ox: 80, oy: 80, z: 0.8 },
@@ -304,9 +312,21 @@ export const usePlanStore = create<PlanState>()(
 				},
 				toggleGuide: () => set((state) => ({ showGuide: !state.showGuide })),
 				setName: (name) => set({ name }),
-				select: (id) =>
-					set((state) => ({ sel: id, tool: id ? "select" : state.tool })),
+				setMode: (mode) =>
+					set({
+						mode,
+						sel: null,
+						tool: "select",
+						draft: null,
+						draftLine: null,
+					}),
+				select: (id) => {
+					const item = get().items.find((i) => i.id === id);
+					if (item && !inMode(get().mode, item.type)) return;
+					set((state) => ({ sel: id, tool: id ? "select" : state.tool }));
+				},
 				setTool: (tool) =>
+					inMode(get().mode, tool) &&
 					set((state) => ({
 						tool,
 						sel: tool === "select" ? state.sel : null,
@@ -492,7 +512,7 @@ export const usePlanStore = create<PlanState>()(
 				// Centres the copy on `at`, or cascades from the original when the cursor is off-canvas.
 				paste: (at) => {
 					const source = get().clipboard;
-					if (!source) return;
+					if (!source || !inMode(get().mode, source.type)) return;
 					const items = get().items,
 						bounds = boundsOf(source);
 					let dx: number, dy: number;

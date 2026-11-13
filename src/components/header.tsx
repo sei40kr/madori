@@ -54,7 +54,11 @@ export function Header({
 		const state = usePlanStore.getState();
 		if (svgRef.current)
 			write(svgRef.current, {
-				items: state.items,
+				// Furniture is hidden from the plan-mode export, so it must not widen the crop either.
+				items:
+					state.mode === "plan"
+						? state.items.filter((item) => item.type !== "furniture")
+						: state.items,
 				name: state.name,
 				floor:
 					openFloors(state).length > 1 ? floorName(state.floor) : undefined,

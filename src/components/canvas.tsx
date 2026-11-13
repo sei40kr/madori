@@ -20,7 +20,7 @@ import {
 	snapFaces,
 	snapGuides,
 } from "@/lib/geometry";
-import { floorName, GRID, usePlanStore } from "@/lib/plan-store";
+import { floorName, GRID, inMode, usePlanStore } from "@/lib/plan-store";
 import type {
 	Furniture,
 	Item,
@@ -205,8 +205,11 @@ export function Canvas({
 		if (event.button === 1 || spaceHeld.current)
 			return { mode: "pan", view: state.view, deselect: false };
 		const itemElement = target.closest("[data-id]");
+		// Items of the other mode can't be grabbed; the click falls through to the canvas.
 		const hit = state.items.find(
-			(item) => item.id === itemElement?.getAttribute("data-id"),
+			(item) =>
+				item.id === itemElement?.getAttribute("data-id") &&
+				inMode(state.mode, item.type),
 		);
 		const grab = (item: Item): Drag => {
 			state.select(item.id);
@@ -486,6 +489,7 @@ export function Canvas({
 					view={store.view}
 					sel={store.items.find((item) => item.id === store.sel) ?? null}
 					tool={store.tool}
+					mode={store.mode}
 					draft={store.draft}
 					draftLine={store.draftLine}
 					panning={panning}
