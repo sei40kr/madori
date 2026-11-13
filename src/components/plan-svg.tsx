@@ -82,55 +82,49 @@ function Label({
 	);
 }
 
-function RoomLabels({
-	item: room,
-	z,
-	showDims,
-}: Shape<Room> & { showDims: boolean }) {
+function RoomLabels({ item: room, z }: Shape<Room>) {
 	const cx = room.x + room.w / 2,
 		cy = room.y + room.h / 2,
-		m2 = roomM2(room),
+		m2 = roomM2(room);
+	return room.w * z > 76 && room.h * z > 48 ? (
+		<>
+			<Label
+				x={cx}
+				y={cy - screenPx(9, z)}
+				size={13}
+				fill={palette.gray900}
+				weight={600}
+				z={z}
+			>
+				{room.name}
+			</Label>
+			<Label
+				x={cx}
+				y={cy + screenPx(9, z)}
+				size={11.5}
+				fill={palette.gray600}
+				weight={400}
+				z={z}
+			>
+				{`${m2.toFixed(1)}㎡ · ${toJo(m2).toFixed(1)}畳`}
+			</Label>
+		</>
+	) : (
+		room.w * z > 30 && (
+			<Label x={cx} y={cy} size={11} fill={palette.gray900} weight={600} z={z}>
+				{room.name}
+			</Label>
+		)
+	);
+}
+
+function RoomDims({ item: room, z }: Shape<Room>) {
+	const cx = room.x + room.w / 2,
+		cy = room.y + room.h / 2,
 		dx = room.x + screenPx(11, z);
 	return (
 		<>
-			{room.w * z > 76 && room.h * z > 48 ? (
-				<>
-					<Label
-						x={cx}
-						y={cy - screenPx(9, z)}
-						size={13}
-						fill={palette.gray900}
-						weight={600}
-						z={z}
-					>
-						{room.name}
-					</Label>
-					<Label
-						x={cx}
-						y={cy + screenPx(9, z)}
-						size={11.5}
-						fill={palette.gray600}
-						weight={400}
-						z={z}
-					>
-						{`${m2.toFixed(1)}㎡ · ${toJo(m2).toFixed(1)}畳`}
-					</Label>
-				</>
-			) : (
-				room.w * z > 30 && (
-					<Label
-						x={cx}
-						y={cy}
-						size={11}
-						fill={palette.gray900}
-						weight={600}
-						z={z}
-					>
-						{room.name}
-					</Label>
-				)
-			)}
-			{showDims && room.w * z > 64 && (
+			{room.w * z > 64 && (
 				<Label
 					x={cx}
 					y={room.y + screenPx(11, z)}
@@ -142,7 +136,7 @@ function RoomLabels({
 					{formatMetres(room.w)}
 				</Label>
 			)}
-			{showDims && room.h * z > 64 && (
+			{room.h * z > 64 && (
 				<Label
 					x={dx}
 					y={cy}
@@ -197,18 +191,7 @@ function FurnitureShape({ item: furniture, z, cursor }: Shape<Furniture>) {
 	);
 }
 
-function Partition({
-	item: wall,
-	z,
-	cursor,
-	showDims,
-}: Shape<Wall> & { showDims: boolean }) {
-	const len = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
-	const mx = (wall.x1 + wall.x2) / 2,
-		my = (wall.y1 + wall.y2) / 2,
-		horizontal = wall.y1 === wall.y2;
-	const lx = horizontal ? mx : mx + 4 + screenPx(11, z),
-		ly = horizontal ? my - 4 - screenPx(10, z) : my;
+function Partition({ item: wall, z, cursor }: Shape<Wall>) {
 	return (
 		<>
 			{/* Wider invisible stroke as the hit area. */}
@@ -233,20 +216,31 @@ function Partition({
 				strokeLinecap="square"
 				style={{ cursor }}
 			/>
-			{showDims && len * z > 64 && (
-				<Label
-					x={lx}
-					y={ly}
-					size={10.5}
-					fill={palette.gray500}
-					weight={500}
-					z={z}
-					transform={horizontal ? undefined : `rotate(-90 ${lx} ${ly})`}
-				>
-					{formatMetres(len)}
-				</Label>
-			)}
 		</>
+	);
+}
+
+function PartitionDims({ item: wall, z }: Shape<Wall>) {
+	const len = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
+	const mx = (wall.x1 + wall.x2) / 2,
+		my = (wall.y1 + wall.y2) / 2,
+		horizontal = wall.y1 === wall.y2;
+	const lx = horizontal ? mx : mx + 4 + screenPx(11, z),
+		ly = horizontal ? my - 4 - screenPx(10, z) : my;
+	return (
+		len * z > 64 && (
+			<Label
+				x={lx}
+				y={ly}
+				size={10.5}
+				fill={palette.gray500}
+				weight={500}
+				z={z}
+				transform={horizontal ? undefined : `rotate(-90 ${lx} ${ly})`}
+			>
+				{formatMetres(len)}
+			</Label>
+		)
 	);
 }
 
@@ -278,51 +272,94 @@ function PillarShape({ item: pillar, z, cursor }: Shape<Pillar>) {
 	);
 }
 
-// Drawn along +x centred on the origin; the wrapper rotates/flips it into place.
-function FixtureSymbol({ item: fixture, z }: Shape<Door | Window>) {
-	const length = fixture.len,
+// Fixture parts are drawn along +x centred on the origin; `Fixture` rotates/flips them into place.
+// The swing is drawn under furniture and walls so they stay grabbable inside it.
+function DoorLeaf({ item: door, z }: Shape<Door>) {
+	const length = door.len,
 		thickness = 12,
-		hitT = Math.max(thickness, screenPx(10, z)),
 		thin = screenPx(1, z);
-	const gap = (
-		<rect
-			x={-length / 2}
-			y={-thickness / 2}
-			width={length}
-			height={thickness}
-			fill={palette.white}
-		/>
-	);
-	const jambs = (
-		<>
-			<line
-				x1={-length / 2}
-				y1={-thickness / 2}
-				x2={-length / 2}
-				y2={thickness / 2}
-				stroke={palette.gray800}
-				strokeWidth={screenPx(1.5, z)}
+	if (door.kind === "slide") {
+		const arrowLength = screenPx(5, z),
+			arrowSpread = screenPx(4, z);
+		return (
+			<path
+				d={`M ${-length / 4} ${thickness / 2 + screenPx(6, z)} H ${length / 4} m ${-arrowLength} ${-arrowSpread} l ${arrowLength} ${arrowSpread} l ${-arrowLength} ${arrowSpread}`}
+				fill="none"
+				stroke={palette.gray500}
+				strokeWidth={screenPx(1.25, z)}
+				strokeLinecap="round"
+				strokeLinejoin="round"
 			/>
-			<line
-				x1={length / 2}
-				y1={-thickness / 2}
-				x2={length / 2}
-				y2={thickness / 2}
-				stroke={palette.gray800}
-				strokeWidth={screenPx(1.5, z)}
-			/>
-		</>
-	);
-	if (fixture.type === "window")
+		);
+	}
+	if (door.kind === "fold")
 		return (
 			<>
 				<rect
 					x={-length / 2}
-					y={-hitT}
+					y={-length * 0.45}
 					width={length}
-					height={2 * hitT}
+					height={length * 0.45 + thickness / 2}
 					fill="transparent"
 				/>
+				<path
+					d={`M ${-length / 2} 0 L ${-length / 4} ${-length * 0.43} L 0 0`}
+					fill="none"
+					stroke={palette.gray800}
+					strokeWidth={screenPx(2.5, z)}
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				/>
+			</>
+		);
+	return (
+		<>
+			<rect
+				x={-length / 2}
+				y={-length}
+				width={length}
+				height={length + thickness / 2}
+				fill="transparent"
+			/>
+			<path
+				d={`M ${length / 2} 0 A ${length} ${length} 0 0 0 ${-length / 2} ${-length}`}
+				fill="none"
+				stroke={palette.gray400}
+				strokeWidth={thin}
+				strokeDasharray={`${screenPx(4, z)} ${screenPx(3, z)}`}
+			/>
+			<line
+				x1={-length / 2}
+				y1={0}
+				x2={-length / 2}
+				y2={-length}
+				stroke={palette.gray800}
+				strokeWidth={screenPx(2.5, z)}
+				strokeLinecap="round"
+			/>
+		</>
+	);
+}
+
+// Covers the wall it sits on to cut the gap, and is the fixture's hit area on that wall.
+function FixtureOpening({ item: fixture, z }: Shape<Door | Window>) {
+	const length = fixture.len,
+		thickness = 12,
+		hitT = Math.max(thickness, screenPx(10, z)),
+		thin = screenPx(1, z);
+	const hit = (
+		<rect
+			x={-length / 2}
+			y={-hitT}
+			width={length}
+			height={2 * hitT}
+			fill="transparent"
+		/>
+	);
+	if (fixture.type === "window")
+		return (
+			<>
+				{hit}
 				<rect
 					x={-length / 2}
 					y={-thickness / 2}
@@ -342,69 +379,40 @@ function FixtureSymbol({ item: fixture, z }: Shape<Door | Window>) {
 				/>
 			</>
 		);
-	if (fixture.kind === "slide") {
-		const arrowLength = screenPx(5, z),
-			arrowSpread = screenPx(4, z);
-		return (
-			<>
-				<rect
-					x={-length / 2}
-					y={-hitT}
-					width={length}
-					height={2 * hitT}
-					fill="transparent"
-				/>
-				{gap}
-				<rect
-					x={length / 2}
-					y={-thickness / 2 + 1}
-					width={length * 0.9}
-					height={4}
-					fill="none"
-					stroke={palette.gray400}
-					strokeWidth={thin}
-					strokeDasharray={`${screenPx(3, z)} ${screenPx(2, z)}`}
-				/>
-				<rect
-					x={-length / 2}
-					y={-thickness / 2 + 1}
-					width={length}
-					height={4}
-					fill={palette.white}
-					stroke={palette.gray800}
-					strokeWidth={screenPx(1.5, z)}
-				/>
-				<path
-					d={`M ${-length / 4} ${thickness / 2 + screenPx(6, z)} H ${length / 4} m ${-arrowLength} ${-arrowSpread} l ${arrowLength} ${arrowSpread} l ${-arrowLength} ${arrowSpread}`}
-					fill="none"
-					stroke={palette.gray500}
-					strokeWidth={screenPx(1.25, z)}
-					strokeLinecap="round"
-					strokeLinejoin="round"
-				/>
-				{jambs}
-			</>
-		);
-	}
-	if (fixture.kind === "fold")
-		return (
-			<>
-				<rect
-					x={-length / 2}
-					y={-length * 0.45}
-					width={length}
-					height={length * 0.45 + thickness / 2}
-					fill="transparent"
-				/>
-				{gap}
-				<path
-					d={`M ${-length / 2} 0 L ${-length / 4} ${-length * 0.43} L 0 0`}
-					fill="none"
-					stroke={palette.gray800}
-					strokeWidth={screenPx(2.5, z)}
-					strokeLinecap="round"
-					strokeLinejoin="round"
-				/>
+	return (
+		<>
+			{hit}
+			<rect
+				x={-length / 2}
+				y={-thickness / 2}
+				width={length}
+				height={thickness}
+				fill={palette.white}
+			/>
+			{fixture.kind === "slide" && (
+				<>
+					<rect
+						x={length / 2}
+						y={-thickness / 2 + 1}
+						width={length * 0.9}
+						height={4}
+						fill="none"
+						stroke={palette.gray400}
+						strokeWidth={thin}
+						strokeDasharray={`${screenPx(3, z)} ${screenPx(2, z)}`}
+					/>
+					<rect
+						x={-length / 2}
+						y={-thickness / 2 + 1}
+						width={length}
+						height={4}
+						fill={palette.white}
+						stroke={palette.gray800}
+						strokeWidth={screenPx(1.5, z)}
+					/>
+				</>
+			)}
+			{fixture.kind === "fold" && (
 				<line
 					x1={0}
 					y1={0}
@@ -414,41 +422,28 @@ function FixtureSymbol({ item: fixture, z }: Shape<Door | Window>) {
 					strokeWidth={thin}
 					strokeDasharray={`${screenPx(3, z)} ${screenPx(2, z)}`}
 				/>
-				{jambs}
-			</>
-		);
-	return (
-		<>
-			<rect
-				x={-length / 2}
-				y={-length}
-				width={length}
-				height={length + thickness / 2}
-				fill="transparent"
-			/>
-			{gap}
-			<path
-				d={`M ${length / 2} 0 A ${length} ${length} 0 0 0 ${-length / 2} ${-length}`}
-				fill="none"
-				stroke={palette.gray400}
-				strokeWidth={thin}
-				strokeDasharray={`${screenPx(4, z)} ${screenPx(3, z)}`}
-			/>
-			<line
-				x1={-length / 2}
-				y1={0}
-				x2={-length / 2}
-				y2={-length}
-				stroke={palette.gray800}
-				strokeWidth={screenPx(2.5, z)}
-				strokeLinecap="round"
-			/>
-			{jambs}
+			)}
+			{[-length / 2, length / 2].map((x) => (
+				<line
+					key={x}
+					x1={x}
+					y1={-thickness / 2}
+					x2={x}
+					y2={thickness / 2}
+					stroke={palette.gray800}
+					strokeWidth={screenPx(1.5, z)}
+				/>
+			))}
 		</>
 	);
 }
 
-function Fixture({ item: fixture, z, cursor }: Shape<Door | Window>) {
+function Fixture({
+	item: fixture,
+	z,
+	cursor,
+	part,
+}: Shape<Door | Window> & { part: "leaf" | "opening" }) {
 	const flip = fixture.type === "door" ? fixture.flip : 0;
 	return (
 		<g
@@ -457,7 +452,11 @@ function Fixture({ item: fixture, z, cursor }: Shape<Door | Window>) {
 			style={{ cursor }}
 		>
 			<g transform={`scale(${flip & 1 ? -1 : 1} ${flip & 2 ? -1 : 1})`}>
-				<FixtureSymbol item={fixture} z={z} />
+				{part === "opening" ? (
+					<FixtureOpening item={fixture} z={z} />
+				) : (
+					fixture.type === "door" && <DoorLeaf item={fixture} z={z} />
+				)}
 			</g>
 		</g>
 	);
@@ -727,7 +726,8 @@ export function PlanSvg(props: PlanSvgProps) {
 		props.items.filter(
 			(item): item is Extract<Item, { type: T }> => item.type === type,
 		);
-	const rooms = ofType("room");
+	const rooms = ofType("room"),
+		doors = ofType("door");
 	return (
 		<svg
 			ref={props.svgRef}
@@ -772,6 +772,18 @@ export function PlanSvg(props: PlanSvgProps) {
 					/>
 				))}
 				{rooms.map((room) => (
+					<RoomLabels key={`l${room.id}`} item={room} z={z} />
+				))}
+				{doors.map((item) => (
+					<Fixture
+						key={`s${item.id}`}
+						item={item}
+						z={z}
+						cursor={cursor}
+						part="leaf"
+					/>
+				))}
+				{rooms.map((room) => (
 					<rect
 						key={`w${room.id}`}
 						data-id={room.id}
@@ -786,36 +798,31 @@ export function PlanSvg(props: PlanSvgProps) {
 						style={{ cursor }}
 					/>
 				))}
-				{rooms.map((room) => (
-					<RoomLabels
-						key={`l${room.id}`}
-						item={room}
-						z={z}
-						showDims={props.showDims}
-					/>
-				))}
-				{ofType("furniture").map((item) => (
-					<FurnitureShape key={item.id} item={item} z={z} cursor={cursor} />
-				))}
 				{ofType("wall").map((item) => (
-					<Partition
-						key={item.id}
-						item={item}
-						z={z}
-						cursor={cursor}
-						showDims={props.showDims}
-					/>
+					<Partition key={item.id} item={item} z={z} cursor={cursor} />
 				))}
 				{ofType("pillar").map((item) => (
 					<PillarShape key={item.id} item={item} z={z} cursor={cursor} />
 				))}
-				{props.items
-					.filter(
-						(item): item is Door | Window =>
-							item.type === "door" || item.type === "window",
-					)
-					.map((item) => (
-						<Fixture key={item.id} item={item} z={z} cursor={cursor} />
+				{[...doors, ...ofType("window")].map((item) => (
+					<Fixture
+						key={item.id}
+						item={item}
+						z={z}
+						cursor={cursor}
+						part="opening"
+					/>
+				))}
+				{props.showDims &&
+					rooms.map((room) => (
+						<RoomDims key={`d${room.id}`} item={room} z={z} />
+					))}
+				{ofType("furniture").map((item) => (
+					<FurnitureShape key={item.id} item={item} z={z} cursor={cursor} />
+				))}
+				{props.showDims &&
+					ofType("wall").map((item) => (
+						<PartitionDims key={`d${item.id}`} item={item} z={z} />
 					))}
 				{props.sel && (
 					<Selection item={props.sel} z={z} coarse={props.coarse} />
