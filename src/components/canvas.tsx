@@ -201,11 +201,11 @@ export function Canvas({
 		};
 		const tool = state.tool;
 		if (tool !== "select") {
-			// With a placing tool active, grabbing an existing object switches to moving it.
+			// With a placing tool active, grabbing an existing object switches to moving it, except where the tool builds on walls.
 			const placesOver =
 				!hit ||
 				(hit.type === "room" && !itemElement?.hasAttribute("data-wall")) ||
-				((tool === "door" || tool === "window") &&
+				((tool === "door" || tool === "window" || tool === "wall") &&
 					(hit.type === "room" || hit.type === "wall"));
 			if (hit && !placesOver) return grab(hit);
 			if (tool === "pillar") state.addPillar(point);
